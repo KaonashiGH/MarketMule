@@ -1,15 +1,17 @@
 """Forums: members fill in a form and the bot publishes a standardized forum post.
 
-Used for bug reports and feature requests, loadouts and trade-ups. Each forum channel offers one or more forms from templetes/forums/, each with its own button on the channel's pinned post. 
-Staff manage each post status and tags
+Used for bug reports, feature requests, loadouts and trade-ups. Each forum channel offers one or
+more forms from templates/forums/, each with its own button on the channel's pinned post.
+Staff manage each post's status and tags.
+
 Files:
     templates.py  template model and validation
     storage.py    this feature's tables
     context.py    shared state passed to commands and views
-    forms.py      member-facing Start button and form pages
+    forms.py      pinned Start here post and the form pages
     posting.py    rendering and publishing posts
     tags.py       forum tag helpers
-    admin.py      /forums setup, remove, list
+    admin.py      /forums setup, remove, list (a channel can offer several forms)
     staff.py      Manage post tool
 """
 
@@ -19,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from .admin import ForumAdmin
 from .context import ForumsContext
-from .forms import StartView
+from .forms import FormPanel
 from .staff import ForumStaff
 from .storage import ForumStorage
 from .templates import load_templates
@@ -34,6 +36,7 @@ async def setup(bot: MarketMule) -> None:
     await storage.migrate()
 
     forums = ForumsContext(bot=bot, storage=storage, templates=templates)
-    bot.add_view(StartView(forums))  # Keeps Start buttons on existing pinned posts working after restarts.
+    # Keeps the buttons on existing pinned posts working after restarts.
+    bot.add_view(FormPanel(forums, list(templates.values())))
     await bot.add_cog(ForumAdmin(forums))
     await bot.add_cog(ForumStaff(forums))

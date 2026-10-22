@@ -1,13 +1,13 @@
 """Forum setup commands: /forums setup, /forums remove, /forums list.
 
-A Forum channel can offer several forms. Running /forms setup again with another form adds it to the same channel and rebuilds the pinned Start here post with a section for each"""
-
-
+A forum channel can offer several forms. Running /forums setup again with another form adds it
+to the same channel and rebuilds the pinned Start here post with a section for each."""
 
 from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 import discord
@@ -16,7 +16,7 @@ from discord.ext import commands
 
 from marketmule.core.staff import get_staff_role
 
-from .forms import StartView
+from .forms import FormPanel, panel_thread_name
 from .posting import fetch_thread
 from .storage import Binding
 from .tags import AUDIT_REASON, TagLimitError, find_tag, sync_forum_tags
@@ -92,6 +92,13 @@ def forum_choices(interaction: discord.Interaction, current: str) -> list[app_co
     ][:25]
 
 
+def form_choices(forums: ForumsContext, current: str) -> list[app_commands.Choice[str]]:
+    current = current.lower()
+    return [
+        app_commands.Choice(name=t.name, value=t.id) for t in forums.templates.values() if current in t.name.lower()
+    ][:25]
+
+
 @app_commands.default_permissions(manage_guild=True)
 @app_commands.guild_only()
 class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set up form-based forum channels"):
@@ -99,8 +106,8 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
         self.forums = forums
         super().__init__()
 
-    @app_commands.command(description="Connect a forum channel to a form and post its pinned Start here message")
-    @app_commands.describe(channel="Forum channel", template="Form used in this channel")
+    @app_commands.command(description="Add a form to a forum channel and refresh its pinned Start here post")
+    @app_commands.describe(channel="Forum channel", template="Form to add. Run again to add a second form.")
     async def setup(self, interaction: discord.Interaction, channel: str, template: str) -> None:
         guild = interaction.guild
         if guild is None:
@@ -124,8 +131,15 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
             )
             return
 
+        # Keep the channel's existing forms and add this one at the end.
+        previous = await self.forums.storage.get_binding(forum.id)
+        template_ids = previous.template_ids if previous else ()
+        if form.id not in template_ids:
+            template_ids = (*template_ids, form.id)
+        forms = self._known(template_ids)
+
         try:
-            created = await sync_forum_tags(forum, form)
+            created = await sync_forum_tags(forum, forms)
         except TagLimitError as exc:
             await interaction.followup.send(f"{forum.mention}: {exc} Remove some existing tags first.", ephemeral=True)
             return
@@ -136,28 +150,25 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
             return
         forum = refreshed
 
-        previous = await self.forums.storage.get_binding(forum.id)
         webhook_url = previous.webhook_url if previous else None
         if not webhook_url:
             webhook_url = (await forum.create_webhook(name=WEBHOOK_NAME, reason=AUDIT_REASON)).url
-        if previous and previous.panel_thread_id:
-            await self._delete_thread(guild, previous.panel_thread_id)
 
-        panel = await self._post_panel(forum, form)
+        panel = await self._replace_panel(forum, previous, forms)
         await self.forums.storage.save_binding(
             Binding(
                 channel_id=forum.id,
                 guild_id=guild.id,
-                template_id=form.id,
+                template_ids=tuple(f.id for f in forms),
                 webhook_url=webhook_url,
                 panel_thread_id=panel.id,
             )
         )
-        log.info("Set up #%s with %s", forum.name, form.id)
+        log.info("Set up #%s with %s", forum.name, ", ".join(f.id for f in forms))
 
+        names = ", ".join(f"**{f.name}**" for f in forms)
         message = (
-            f"{forum.mention} now uses the **{form.name}** form. "
-            f"Created {created} tag(s) and pinned {panel.mention}.\n"
+            f"{forum.mention} now offers: {names}. Created {created} tag(s) and pinned {panel.mention}.\n"
             "Make sure @everyone has **Create Posts** off and **Send Messages in Posts** on in this channel."
         )
         if await get_staff_role(self.forums.bot.db, guild.id) is None:
@@ -174,16 +185,11 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
     async def setup_template_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        current = current.lower()
-        return [
-            app_commands.Choice(name=t.name, value=t.id)
-            for t in self.forums.templates.values()
-            if current in t.name.lower()
-        ][:25]
+        return form_choices(self.forums, current)
 
-    @app_commands.command(description="Stop using a form in a forum channel")
-    @app_commands.describe(channel="Forum channel")
-    async def remove(self, interaction: discord.Interaction, channel: str) -> None:
+    @app_commands.command(description="Remove one form from a forum channel, or every form if none is picked")
+    @app_commands.describe(channel="Forum channel", template="Form to remove. Leave empty to remove them all.")
+    async def remove(self, interaction: discord.Interaction, channel: str, template: str | None = None) -> None:
         guild = interaction.guild
         if guild is None:
             return
@@ -192,12 +198,34 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
         if forum is None or binding is None:
             await interaction.response.send_message("That channel isn't set up.", ephemeral=True)
             return
+        if template is not None and template not in binding.template_ids:
+            await interaction.response.send_message(f"{forum.mention} doesn't offer that form.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
 
-        if binding.panel_thread_id:
-            await self._delete_thread(guild, binding.panel_thread_id)
-        await self.forums.storage.delete_binding(forum.id)
-        await interaction.response.send_message(
-            f"Removed {forum.mention}. Existing posts are kept and can still be managed.", ephemeral=True
+        remaining = self._known(t for t in binding.template_ids if template is not None and t != template)
+        if not remaining:
+            if binding.panel_thread_id:
+                await self._delete_thread(guild, binding.panel_thread_id)
+            await self.forums.storage.delete_binding(forum.id)
+            await interaction.followup.send(
+                f"Removed {forum.mention}. Existing posts are kept and can still be managed.", ephemeral=True
+            )
+            return
+
+        panel = await self._replace_panel(forum, binding, remaining)
+        await self.forums.storage.save_binding(
+            Binding(
+                channel_id=binding.channel_id,
+                guild_id=binding.guild_id,
+                template_ids=tuple(f.id for f in remaining),
+                webhook_url=binding.webhook_url,
+                panel_thread_id=panel.id,
+            )
+        )
+        await interaction.followup.send(
+            f"Removed that form from {forum.mention}. It still offers: {', '.join(f.name for f in remaining)}.",
+            ephemeral=True,
         )
 
     @remove.autocomplete("channel")
@@ -206,7 +234,13 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
     ) -> list[app_commands.Choice[str]]:
         return forum_choices(interaction, current)
 
-    @app_commands.command(name="list", description="Show which forums use which form")
+    @remove.autocomplete("template")
+    async def remove_template_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return form_choices(self.forums, current)
+
+    @app_commands.command(name="list", description="Show which forums offer which forms")
     async def list_bindings(self, interaction: discord.Interaction) -> None:
         guild = interaction.guild
         if guild is None:
@@ -218,23 +252,33 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
 
         lines = []
         for binding in bindings:
-            template = self.forums.templates.get(binding.template_id)
-            name = template.name if template else binding.template_id
+            names = ", ".join(f"**{f.name}**" for f in self._known(binding.template_ids)) or "no forms"
             count = await self.forums.storage.count_posts(binding.channel_id)
-            lines.append(f"<#{binding.channel_id}> → **{name}** ({count} posts)")
+            lines.append(f"<#{binding.channel_id}> → {names} ({count} posts)")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
-    async def _post_panel(self, forum: discord.ForumChannel, template: Template) -> discord.Thread:
-        """Create the locked, pinned post that holds the form's Start button."""
-        embed = discord.Embed(title=template.panel.title, description=template.panel.text, color=template.color)
+    def _known(self, template_ids: Iterable[str]) -> list[Template]:
+        """Templates for these IDs, skipping any whose file has since been deleted."""
+        return [self.forums.templates[t] for t in template_ids if t in self.forums.templates]
+
+    async def _replace_panel(
+        self, forum: discord.ForumChannel, previous: Binding | None, forms: list[Template]
+    ) -> discord.Thread:
+        """Post a fresh pinned Start here post for these forms and delete the old one."""
+        panel = await self._post_panel(forum, forms)
+        if previous and previous.panel_thread_id and previous.panel_thread_id != panel.id:
+            await self._delete_thread(forum.guild, previous.panel_thread_id)
+        return panel
+
+    async def _post_panel(self, forum: discord.ForumChannel, forms: list[Template]) -> discord.Thread:
+        """Create the locked, pinned post that holds each form's Start button."""
         tags = []
         if forum.flags.require_tag:
-            type_tag = find_tag(forum, template.type_tag)
+            type_tag = find_tag(forum, forms[0].type_tag)
             tags = [type_tag] if type_tag else []
         created = await forum.create_thread(
-            name=template.panel.thread_name,
-            embed=embed,
-            view=StartView(self.forums, template.panel.button_label, template.panel.button_style),
+            name=panel_thread_name(forms),
+            view=FormPanel(self.forums, forms),
             applied_tags=tags,
         )
         return await created.thread.edit(pinned=True, locked=True)
