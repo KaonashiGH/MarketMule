@@ -11,7 +11,7 @@ import discord
 
 from .storage import Binding, Post
 from .tags import find_tag, find_tags
-from .templates import MAX_POST_TAGS, Template
+from .templates import MAX_POST_TAGS, PLACEHOLDER, Section, Template
 
 if TYPE_CHECKING:
     from .context import ForumsContext
@@ -39,28 +39,53 @@ class Submission:
             names += self.choices.get(f.key, [])
         return names
 
-    def format_values(self, *, has_files: bool) -> dict[str, str]:
-        values = _DefaultDict({key: value or "N/A" for key, value in self.text.items()})
-        values.update({key: ", ".join(picked) or "N/A" for key, picked in self.choices.items()})
-        values["attachments"] = "See the images below." if has_files else "None provided."
+    def answers(self) -> dict[str, str]:
+        """Every answer as text. Unanswered questions are empty strings."""
+        values = _Answers({key: value.strip() for key, value in self.text.items()})
+        values.update({key: ", ".join(picked) for key, picked in self.choices.items()})
         return values
 
 
-class _DefaultDict(dict[str, str]):
-    """Unanswered fields render as N/A instead of raising KeyError."""
+class _Answers(dict[str, str]):
+    """Questions the member skipped read as empty instead of raising KeyError."""
 
     def __missing__(self, key: str) -> str:
-        return "N/A"
+        return ""
 
 
-def render(submission: Submission, *, number: int, credit: str, has_files: bool) -> tuple[str, list[str]]:
-    """Build the post title and its body, split into messages that fit Discord's length limit."""
+def render(submission: Submission, *, number: int, author_mention: str) -> tuple[str, list[str]]:
+    """Build the post title and its body, split into messages that fit Discord's length limit.
+
+    The body is a small summary line, one heading per answered section, and a credit footer.
+    Lines and sections whose questions were all skipped are left out, so posts never show "N/A".
+    """
     template = submission.template
-    values = submission.format_values(has_files=has_files)
-    title = template.title_format.format_map(values)[:MAX_THREAD_NAME]
-    blocks = [f"**{s.heading}**\n{s.body.format_map(values)}" for s in template.sections]
-    blocks.append(f"-# {credit} · {template.id_prefix}-{number:04d}")
+    answers = submission.answers()
+    title = template.title_format.format_map(answers)[:MAX_THREAD_NAME]
+
+    blocks = [_header_line(template, answers)]
+    blocks += [block for section in template.sections if (block := _render_section(section, answers))]
+    blocks.append(f"-# {template.credit} {author_mention} · {template.id_prefix}-{number:04d}")
     return title, split_message(blocks)
+
+
+def _header_line(template: Template, answers: dict[str, str]) -> str:
+    """For example: -# 💡 Feature request · Trading · Website"""
+    emoji = template.tag_emojis.get(template.type_tag, "")
+    parts = [f"{emoji} {template.name}".strip(), *(answers[key] for key in template.header if answers[key])]
+    return "-# " + " · ".join(parts)
+
+
+def _render_section(section: Section, answers: dict[str, str]) -> str | None:
+    """Render one section, dropping lines whose questions were all skipped. None if nothing is left."""
+    lines = []
+    for line in section.body.split("\n"):
+        keys = PLACEHOLDER.findall(line)
+        if keys and not any(answers[key] for key in keys):
+            continue
+        lines.append(line.format_map(answers))
+    body = "\n".join(lines).strip()
+    return f"### {section.heading}\n{body}" if body else None
 
 
 def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT) -> list[str]:
@@ -147,7 +172,7 @@ async def _post_as_author(
 ) -> discord.Thread:
     """Post through the forum's webhook, showing the member's name and avatar."""
     author = submission.author
-    title, messages = render(submission, number=number, credit=f"Submitted by {author.mention}", has_files=bool(files))
+    title, messages = render(submission, number=number, author_mention=author.mention)
     webhook = discord.Webhook.from_url(submission.binding.webhook_url or "", client=forums.bot)
     identity = {"username": webhook_username(author.display_name), "avatar_url": author.display_avatar.url}
     mentions = _mention_only(author)
@@ -182,7 +207,7 @@ async def _post_as_bot(
 ) -> discord.Thread:
     """Fallback when the webhook is missing or fails: the bot posts and credits the member."""
     author = submission.author
-    title, messages = render(submission, number=number, credit=f"Posted for {author.mention}", has_files=bool(files))
+    title, messages = render(submission, number=number, author_mention=author.mention)
     mentions = _mention_only(author)
 
     created = await forum.create_thread(

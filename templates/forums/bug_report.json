@@ -63,14 +63,15 @@
     }
   ],
 
+  "header": ["area", "platform", "category"],
   "sections": [
-    {"heading": "1. Description of the Bug", "body": "{description}"},
-    {"heading": "2. Steps to Reproduce", "body": "{steps}"},
-    {"heading": "3. Expected vs. Actual Behavior", "body": "{expected_actual}"},
-    {"heading": "4. Setup Details", "body": "**Platform:** {platform}\n**Extension Installed?** {extension}\n**Browser & OS:** {browser_os}"},
-    {"heading": "5. Account & Trade Details", "body": "**Your Steam Profile Link:** {steam_link}\n**Trade ID or Item Float:** {trade_ref}"},
-    {"heading": "6. Visual Evidence", "body": "{attachments}"}
+    {"heading": "Description", "body": "{description}"},
+    {"heading": "Steps to reproduce", "body": "{steps}"},
+    {"heading": "Expected vs. actual", "body": "{expected_actual}"},
+    {"heading": "Setup", "body": "**Platform:** {platform}\n**Extension:** {extension}\n**Browser & OS:** {browser_os}"},
+    {"heading": "Account & trade", "body": "**Steam profile:** {steam_link}\n**Trade ID / float:** {trade_ref}"}
   ],
+  "credit": "Reported by",
 
   "statuses": ["Open", "In progress", "Fixed", "Denied", "Duplicate", "Closed"],
   "final_statuses": ["Fixed", "Denied", "Duplicate", "Closed"],

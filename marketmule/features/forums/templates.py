@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+# Matches {key} placeholders in title_format and section bodies.
+PLACEHOLDER = re.compile(r"\{(\w+)\}")
 
 MAX_PAGE_ITEMS = 5
 MAX_MODAL_TITLE = 45
@@ -78,6 +82,8 @@ class Template:
     final_statuses: frozenset[str]
     tag_emojis: dict[str, str]
     reactions: tuple[str, ...]
+    header: tuple[str, ...] = ()
+    credit: str = "Submitted by"
 
     @property
     def fields(self) -> list[Field]:
@@ -155,6 +161,8 @@ def _parse_template(raw: dict[str, Any]) -> Template:
         final_statuses=frozenset(raw.get("final_statuses", ())),
         tag_emojis=dict(raw.get("tag_emojis", {})),
         reactions=tuple(raw.get("reactions", ())),
+        header=tuple(raw.get("header", ())),
+        credit=raw.get("credit", "Submitted by"),
     )
 
 
@@ -185,6 +193,13 @@ def _validate(template: Template) -> list[str]:
     tags_per_post = 2 + sum(f.max_values for f in template.tag_fields)  # type + status + picks
     if tags_per_post > MAX_POST_TAGS:
         errors.append(f"a post could receive {tags_per_post} tags ({MAX_POST_TAGS} allowed)")
+
+    # Catch typos: every {key} and header entry must match a question's key.
+    known = set(keys)
+    used = [("title_format", k) for k in PLACEHOLDER.findall(template.title_format)]
+    used += [(f"section {s.heading!r}", k) for s in template.sections for k in PLACEHOLDER.findall(s.body)]
+    used += [("header", k) for k in template.header]
+    errors += [f"{where} uses {{{key}}}, but no question has that key" for where, key in used if key not in known]
 
     unknown = template.final_statuses - set(template.statuses)
     if unknown:

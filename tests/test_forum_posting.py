@@ -6,12 +6,19 @@ from marketmule.features.forums.storage import Binding
 from marketmule.features.forums.templates import load_templates
 
 TEMPLATES = load_templates(PROJECT_ROOT / "templates" / "forums")
-BINDING = Binding(channel_id=1, guild_id=1, template_id="bug_report", webhook_url=None, panel_thread_id=None)
 
 
-def make_submission(**text: str) -> Submission:
+def make_submission(template_id: str, choices: dict[str, list[str]], **text: str) -> Submission:
     # render() never touches the author, so a placeholder object is enough here.
-    return Submission(template=TEMPLATES["bug_report"], binding=BINDING, author=cast(Any, None), text=text)
+    binding = Binding(channel_id=1, guild_id=1, template_id=template_id, webhook_url=None, panel_thread_id=None)
+    return Submission(
+        template=TEMPLATES[template_id], binding=binding, author=cast(Any, None), text=text, choices=choices
+    )
+
+
+def body_of(submission: Submission, number: int = 7) -> tuple[str, str]:
+    title, messages = render(submission, number=number, author_mention="@someone")
+    return title, "\n\n".join(messages)
 
 
 def test_split_keeps_short_blocks_together() -> None:
@@ -35,21 +42,54 @@ def test_webhook_username_removes_blocked_words() -> None:
     assert len(webhook_username("x" * 200)) == 80
 
 
-def test_render_builds_title_and_footer() -> None:
-    submission = make_submission(summary="Float overlaps name", description="It overlaps.")
-    submission.choices["area"] = ["Marketplace"]
+def test_feature_request_reads_like_a_post() -> None:
+    submission = make_submission(
+        "feature_request",
+        {"area": ["Trading"], "platform": ["Website"], "category": []},
+        summary="Bulk accept trades",
+        description="Add a button to accept all pending trades.",
+        why="Accepting 20 trades one by one takes forever.",
+    )
+    title, body = body_of(submission)
 
-    title, messages = render(submission, number=7, credit="Submitted by someone", has_files=False)
+    assert title == "[Trading] - Bulk accept trades"
+    assert body == (
+        "-# 💡 Feature request · Trading · Website\n\n"
+        "### Description\nAdd a button to accept all pending trades.\n\n"
+        "### Why it's needed\nAccepting 20 trades one by one takes forever.\n\n"
+        "-# Suggested by @someone · IDEA-0007"
+    )
 
-    assert title == "[Marketplace] - Float overlaps name"
-    body = "\n\n".join(messages)
-    assert "It overlaps." in body
-    assert "None provided." in body
-    assert body.endswith("Submitted by someone · BUG-0007")
+
+def test_skipped_optional_questions_are_hidden() -> None:
+    submission = make_submission(
+        "bug_report",
+        {"area": ["Marketplace"], "platform": ["Web Desktop"], "extension": ["No"], "category": []},
+        summary="x",
+        description="d",
+        steps="s",
+        expected_actual="e",
+        browser_os="Chrome",
+        steam_link="",
+        trade_ref="12345",
+    )
+    _, body = body_of(submission)
+
+    assert "N/A" not in body
+    assert "**Trade ID / float:** 12345" in body
+    assert "Steam profile" not in body  # skipped line is dropped, the rest of the section stays
+    assert body.endswith("Reported by @someone · BUG-0007")
 
 
-def test_render_fills_unanswered_fields_with_na() -> None:
-    _, messages = render(make_submission(summary="x"), number=1, credit="c", has_files=True)
-    body = "\n\n".join(messages)
-    assert "**Trade ID or Item Float:** N/A" in body
-    assert "See the images below." in body
+def test_section_disappears_when_all_its_questions_are_skipped() -> None:
+    submission = make_submission(
+        "bug_report",
+        {"area": ["Account"], "platform": ["Mobile App"], "extension": ["No"]},
+        summary="x",
+        description="d",
+        steps="s",
+        expected_actual="e",
+        browser_os="iOS",
+    )
+    _, body = body_of(submission)
+    assert "### Account & trade" not in body

@@ -33,6 +33,12 @@ def test_rejects_page_over_discord_limit(tmp_path: Path) -> None:
         load_templates(tmp_path)
 
 
+def test_rejects_misspelled_placeholder(tmp_path: Path) -> None:
+    write_template(tmp_path, sections=[{"heading": "Description", "body": "{descripton}"}])
+    with pytest.raises(TemplateError, match="descripton"):
+        load_templates(tmp_path)
+
+
 def test_rejects_missing_required_key(tmp_path: Path) -> None:
     (tmp_path / "broken.json").write_text('{"id": "broken"}', encoding="utf-8")
     with pytest.raises(TemplateError, match="invalid template"):
