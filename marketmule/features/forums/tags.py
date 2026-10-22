@@ -31,23 +31,25 @@ def find_tags(forum: discord.ForumChannel, names: Iterable[str]) -> list[discord
     return tags
 
 
-async def sync_forum_tags(forum: discord.ForumChannel, template: Template) -> int:
-    """Create the template's missing tags and apply its tag emojis. Returns the number created.
+async def sync_forum_tags(forum: discord.ForumChannel, templates: Sequence[Template]) -> int:
+    """Create every tag the channel's forms need and apply their tag emojis. Returns the number created.
 
+    Forms sharing a channel share its 20-tag limit, so the check covers all of them together.
     Discord doesn't support colored tags, so templates use colored emojis instead.
     """
     existing = {tag.name.lower() for tag in forum.available_tags}
     missing: list[tuple[str, bool]] = []
-    for name, moderated in template.forum_tags():
-        if name.lower() not in existing:
-            existing.add(name.lower())
-            missing.append((name, moderated))
+    for template in templates:
+        for name, moderated in template.forum_tags():
+            if name.lower() not in existing:
+                existing.add(name.lower())
+                missing.append((name, moderated))
 
     needed = len(forum.available_tags) + len(missing)
     if needed > MAX_FORUM_TAGS:
         raise TagLimitError(needed)
 
-    emojis = {name.lower(): emoji for name, emoji in template.tag_emojis.items()}
+    emojis = {name.lower(): emoji for template in templates for name, emoji in template.tag_emojis.items()}
     for name, moderated in missing:
         emoji = emojis.get(name.lower())
         await forum.create_tag(
