@@ -1,0 +1,50 @@
+{
+  "id": "tradeup",
+  "name": "Trade-up",
+  "type_tag": "Trade-up",
+  "id_prefix": "TRADE",
+  "color": "#3a9b6f",
+  "title_format": "[Trade-Up] - {target} - {chance}",
+
+  "panel": {
+    "thread_name": "Start here: Trade-up help",
+    "title": "🔁 Trade-Ups",
+    "text": "Want a second opinion on a trade-up? Run it through the **CSFloat Trade-Up Calculator**, take a full screenshot, then click **Post a trade-up**.\n\nTell the community your goal and what you need checked. Your post is titled `[Trade-Up] - Target skin - % chance to profit`.",
+    "button_label": "Post a trade-up",
+    "button_style": "primary"
+  },
+
+  "pages": [
+    {
+      "name": "Your trade-up",
+      "title": "Trade-Up",
+      "fields": [
+        {"key": "target", "label": "Target outcome skin", "max_length": 50,
+         "description": "Your post will be titled: [Trade-Up] - Target skin - % chance",
+         "placeholder": "AWP | Asiimov"},
+        {"key": "chance", "label": "Chance to profit", "max_length": 10,
+         "description": "The % chance to profit shown in the calculator",
+         "placeholder": "45%"},
+        {"key": "goal", "type": "select", "tag": true, "label": "Your goal",
+         "description": "Steady profit over volume, or a high-risk shot at a specific skin?",
+         "options": ["Profit (+EV)", "Gamble for a skin"]},
+        {"key": "screenshot", "type": "file", "label": "Trade-Up Calculator screenshot", "max": 3,
+         "description": "A full screenshot from the CSFloat Trade-Up Calculator"},
+        {"key": "question", "label": "What should the community check? (optional)", "style": "paragraph", "max_length": 1000, "required": false,
+         "description": "State your question or concern about this trade-up.",
+         "placeholder": "Are my input floats low enough to hit Factory New?"}
+      ]
+    }
+  ],
+
+  "header": ["goal"],
+  "sections": [
+    {"heading": "What I need checked", "body": "{question}"}
+  ],
+  "credit": "Posted by",
+
+  "statuses": ["Open", "Solved", "Closed"],
+  "final_statuses": ["Closed"],
+  "tag_emojis": {"Trade-up": "🔁", "Open": "🔵", "Solved": "🟢", "Closed": "⚫"},
+  "reactions": []
+}

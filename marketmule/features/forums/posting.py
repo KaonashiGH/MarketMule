@@ -125,7 +125,7 @@ async def publish(forums: ForumsContext, submission: Submission) -> discord.Thre
     forum = await _fetch_forum(author.guild, submission.binding.channel_id)
 
     files = await _download(submission.attachments)
-    number = await forums.storage.next_post_number(forum.id)
+    number = await forums.storage.next_post_number(forum.id, template.id)
     tags = find_tags(forum, submission.tag_names())[: MAX_POST_TAGS - 1]  # leave room for the status tag
 
     thread: discord.Thread | None = None

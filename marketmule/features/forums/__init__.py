@@ -1,8 +1,7 @@
 """Forums: members fill in a form and the bot publishes a standardized forum post.
 
-Used for bug reports and feature requests. Each forum channel is connected to one
-template from templates/forums/. Staff manage each post's status and tags.
-
+Used for bug reports and feature requests, loadouts and trade-ups. Each forum channel offers one or more forms from templetes/forums/, each with its own button on the channel's pinned post. 
+Staff manage each post status and tags
 Files:
     templates.py  template model and validation
     storage.py    this feature's tables

@@ -1,4 +1,8 @@
-"""Forum setup commands: /forums setup, /forums remove, /forums list."""
+"""Forum setup commands: /forums setup, /forums remove, /forums list.
+
+A Forum channel can offer several forms. Running /forms setup again with another form adds it to the same channel and rebuilds the pinned Start here post with a section for each"""
+
+
 
 from __future__ import annotations
 

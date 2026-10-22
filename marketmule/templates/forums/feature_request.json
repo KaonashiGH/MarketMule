@@ -1,0 +1,68 @@
+{
+  "id": "feature_request",
+  "name": "Feature request",
+  "type_tag": "Feature",
+  "id_prefix": "IDEA",
+  "color": "#2f62c9",
+  "title_format": "[{area}] - {summary}",
+
+  "panel": {
+    "thread_name": "Start here: Suggest a feature",
+    "title": "How to suggest a feature",
+    "text": "Have an idea for CSFloat? Click **Suggest a feature** below.\n\n🔍 **Search this forum first.** If your idea is already here, vote on it with ✅ instead of posting a new one.\n\nThe form has two short steps:\n**1. Your idea:** where it applies, a title and a description\n**2. Details:** why it's needed, plus optional sketches or examples\n\nYour post is titled `[Area] - Title`, tagged, and posted here for the team to review. Other users can vote with ✅ or ❌.",
+    "button_label": "Suggest a feature",
+    "button_style": "primary"
+  },
+
+  "pages": [
+    {
+      "name": "Your idea",
+      "title": "Feature Request (1/2): Your idea",
+      "fields": [
+        {"key": "area", "type": "select", "tag": true, "label": "Area of the site",
+         "description": "Becomes a tag so the team can sort your post",
+         "options": ["Marketplace", "Trading", "Chrome Extension", "Database", "Account", "Other"]},
+        {"key": "platform", "type": "select", "tag": true, "label": "Platform",
+         "description": "Where should this work?",
+         "options": ["Website", "Mobile App", "All platforms"]},
+        {"key": "category", "type": "select", "tag": true, "label": "Type of request (optional)", "required": false,
+         "placeholder": "Pick one, or skip",
+         "options": ["New feature", "Improvement", "UI & design", "Notifications"]},
+        {"key": "summary", "label": "Title", "max_length": 75,
+         "description": "Your post will be titled: [Area] - Title",
+         "placeholder": "Add a button to accept multiple trades at once"},
+        {"key": "description", "label": "Description of the feature", "style": "paragraph", "max_length": 1000,
+         "description": "A clear, simple explanation of what you want us to add or change on CSFloat.",
+         "placeholder": "What should we add or change?"}
+      ]
+    },
+    {
+      "name": "Details",
+      "title": "Feature Request (2/2): Details",
+      "fields": [
+        {"key": "why", "label": "Why is this needed?", "style": "paragraph", "max_length": 1000,
+         "description": "Why would this be useful? How does it improve things for you and other users?",
+         "placeholder": "It would save time when..."},
+        {"key": "visuals", "type": "file", "label": "Visual examples (optional)", "required": false, "max": 10,
+         "description": "Rough sketches, mockups or screenshots from other sites"},
+        {"type": "note",
+         "text": "-# To keep this channel organized, requests that are incomplete, off-topic or duplicates may be closed or removed. Please check your answers before pressing **Submit**."}
+      ]
+    }
+  ],
+
+  "header": ["area", "platform", "category"],
+  "sections": [
+    {"heading": "Description", "body": "{description}"},
+    {"heading": "Why it's needed", "body": "{why}"}
+  ],
+  "credit": "Suggested by",
+
+  "statuses": ["Under review", "Planned", "In progress", "Added", "Denied", "Closed"],
+  "final_statuses": ["Added", "Denied", "Closed"],
+  "tag_emojis": {
+    "Feature": "💡",
+    "Under review": "🔵", "Planned": "🟣", "In progress": "🟡", "Added": "🟢", "Denied": "🔴", "Closed": "⚫"
+  },
+  "reactions": ["✅", "❌"]
+}
