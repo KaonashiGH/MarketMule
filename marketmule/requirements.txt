@@ -1,3 +1,0 @@
-aiosqlite>=0.20,<1
-discord.py>=2.7,<3
-python-dotenv>=1.0,<2

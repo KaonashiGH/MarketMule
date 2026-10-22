@@ -1,5 +1,0 @@
-# Keep line endings correct no matter who commits from which OS.
-* text=auto
-*.sh text eol=lf
-*.conf text eol=lf
-*.bat text eol=crlf
