@@ -4,8 +4,7 @@
   "type_tag": "Price Check",
   "id_prefix": "PC",
   "color": "#e0b12f",
-  "title_format": "[Price Check] - {title}",
-
+ "title_format": "[Price Check] - {item} · {wear} · {pattern}",
   "panel": {
     "thread_name": "Start here: Price Checks",
     "title": "How to make a Price Check",
@@ -36,14 +35,39 @@
       "name": "Price Check Continued",
       "title": "Price Check (2/2): Details",
       "fields": [
+        {"key": "features", "type": "select", "tag": true, "label": "Item Features", "max_length": 50},
+        "max" : 3, "placeholder": "Pick 3 features that apply to your item",
+        "options": ["Case Hardended", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
         {"key": "hold", "label": "Provide hold information", "max_length": 50,
          "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
         {"key": "question", "label": "Detail your specific question or concern", "style": "paragraph",
          "max_length": 1000, "required": false,
          "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
+        {"key": "link", "label": "CSFloat link to the item (optional)", "max_length": 300, "required": false,
+         "placeholder": "[e.g., https://csfloat.com/item/...]"},
         {"key": "screenshots", "type": "file", "label": "In-game and CS2 inspect screenshots", "max": 10,
          "description": "Don't forget to attach your in-game and CS2 inspect menu screenshots before hitting post!"}
       ]
     }
   ],
 
+
+  "header": ["hold"],
+  "sections": [
+    {"heading": "Item", "body": "**Name:** {item}\n**Wear:** {wear}\n**Pattern:** {pattern}"},
+    {"heading": "Stickers", "body": "{stickers}"},
+    {"heading": "Question", "body": "{question}"},
+    {"heading": "", "body": "🔗 {link}", "after_credit": true}
+  ],
+  "credit": "Posted by",
+
+  "statuses": ["Needs pricing", "Priced", "Closed"],
+  "final_statuses": ["Priced", "Closed"],
+  "author_close": {
+    "status": "Priced",
+    "button_label": "Mark as priced",
+    "text": "-# Happy with the answers? Press **Mark as priced** to close your price check."
+  },
+  "tag_emojis": {"Price Check": "💰", "Needs pricing": "🔵", "Priced": "🟢", "Closed": "⚫"},
+  "reactions": ["💸", "❌"]
+}
