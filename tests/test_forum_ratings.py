@@ -195,3 +195,44 @@ def test_existing_posts_survive_the_ratings_upgrade(tmp_path: Path) -> None:
         await db.close()
 
     run(scenario())
+
+
+def test_staff_can_find_and_remove_a_rating(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        db, storage = await fresh_storage(tmp_path)
+        await storage.save_rating(MemberRating(1, 50, {"a": 5}, message_id=900))
+        await storage.save_rating(MemberRating(1, 60, {"a": 9}, message_id=901))
+
+        found = await storage.find_rating_by_message(900)
+        assert found is not None and (found.thread_id, found.rater_id) == (1, 50)
+        assert await storage.find_rating_by_message(12345) is None
+
+        await storage.delete_rating(1, 50)
+        assert await storage.get_rating(1, 50) is None
+        assert await storage.rating_summary(1) == RatingSummary(average=9.0, count=1)
+        await db.close()
+
+    run(scenario())
+
+
+def test_blocking_members_from_rating(tmp_path: Path) -> None:
+    async def scenario() -> None:
+        db, storage = await fresh_storage(tmp_path)
+        await storage.block_rater(1, 50, "rude notes", blocked_by=7)
+        assert await storage.is_rater_blocked(1, 50)
+        assert not await storage.is_rater_blocked(2, 50)  # blocks are per server
+        assert [(b.user_id, b.reason, b.blocked_by) for b in await storage.list_rating_blocks(1)] == [
+            (50, "rude notes", 7)
+        ]
+
+        assert await storage.unblock_rater(1, 50)
+        assert not await storage.unblock_rater(1, 50)  # already unblocked
+        assert not await storage.is_rater_blocked(1, 50)
+        await db.close()
+
+    run(scenario())
+
+
+def test_removing_the_last_rating_clears_the_score() -> None:
+    rating = rating_of("loadout")
+    assert with_score("-# 🎨 Loadout · $1,500 · ⭐ 30/40", rating, RatingSummary()) == "-# 🎨 Loadout · $1,500"

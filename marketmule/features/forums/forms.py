@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 import discord
 from discord import ui
 
+from marketmule.core.views import FixAnswersView, blocked_words_message
+
 from .posting import Submission, publish
 from .ratings import offer_rating
 from .status import offer_author_close
@@ -138,6 +140,13 @@ class FormPage(ui.Modal):
     async def on_submit(self, interaction: discord.Interaction) -> None:
         self._collect()
         template = self.submission.template
+
+        typed = [self.submission.text.get(f.key) for f, c in self.inputs if isinstance(c, ui.TextInput)]
+        blocked = self.forums.bot.word_filter.find(*typed)
+        if blocked:
+            reopen = FixAnswersView(lambda: FormPage(self.forums, self.submission, self.index))
+            await self._reply(interaction, blocked_words_message(blocked), reopen)
+            return
 
         if not self.is_last:
             next_page = template.pages[self.index + 1]

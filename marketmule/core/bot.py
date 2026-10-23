@@ -11,6 +11,7 @@ from discord.ext import commands
 from marketmule.core.admin import CoreAdmin
 from marketmule.core.config import Config
 from marketmule.core.database import Database
+from marketmule.core.wordfilter import WordFilter
 
 log = logging.getLogger(__name__)
 
@@ -37,6 +38,7 @@ class MarketMule(commands.Bot):
         )
         self.config = config
         self.db = Database(config.database_path)
+        self.word_filter = WordFilter(config.blocked_words_path)
 
     async def setup_hook(self) -> None:
         await self.db.connect()

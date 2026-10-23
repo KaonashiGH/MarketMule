@@ -1,0 +1,8 @@
+# Blocked words and phrases
+#
+# One word or phrase per line. Lines starting with # are ignored.
+# Capital letters don't matter, and only whole words match
+#
+# checks form answers and rating notes against this list before posting them,
+#
+#Wordlist: 

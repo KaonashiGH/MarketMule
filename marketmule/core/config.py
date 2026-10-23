@@ -24,6 +24,10 @@ class Config:
         return self.project_root / "data" / "marketmule.db"
 
     @property
+    def blocked_words_path(self) -> Path:
+        return self.project_root / "config" / "blocked_words.txt"
+
+    @property
     def templates_dir(self) -> Path:
         """Each feature keeps its templates in a subfolder, e.g. templates/forums/."""
         return self.project_root / "templates"

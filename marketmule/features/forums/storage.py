@@ -61,6 +61,17 @@ MIGRATIONS: tuple[str, ...] = (
 
     ALTER TABLE forum_posts ADD COLUMN rating_message_id INTEGER;
     """,
+    # 4: members staff have blocked from rating, per server.
+    """
+    CREATE TABLE forum_rating_blocks (
+        guild_id   INTEGER NOT NULL,
+        user_id    INTEGER NOT NULL,
+        reason     TEXT,
+        blocked_by INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        PRIMARY KEY (guild_id, user_id)
+    );
+    """,
 )
 
 
@@ -99,6 +110,13 @@ class MemberRating:
     @property
     def total(self) -> int:
         return sum(self.scores.values())
+
+
+@dataclass(frozen=True)
+class RatingBlock:
+    user_id: int
+    reason: str | None
+    blocked_by: int
 
 
 @dataclass(frozen=True)
@@ -269,3 +287,43 @@ class ForumStorage:
             limit,
         )
         return [RankedPost(int(r[0]), int(r[1]), float(r[2]), int(r[3])) for r in rows]
+
+    async def find_rating_by_message(self, message_id: int) -> MemberRating | None:
+        """The rating shown by a message, so staff can remove it from the message itself."""
+        row = await self._db.fetch_one("SELECT thread_id, rater_id FROM forum_ratings WHERE message_id = ?", message_id)
+        return await self.get_rating(row[0], row[1]) if row else None
+
+    async def delete_rating(self, thread_id: int, rater_id: int) -> None:
+        await self._db.execute("DELETE FROM forum_ratings WHERE thread_id = ? AND rater_id = ?", thread_id, rater_id)
+
+    # Members blocked from rating
+
+    async def block_rater(self, guild_id: int, user_id: int, reason: str | None, blocked_by: int) -> None:
+        await self._db.execute(
+            "INSERT OR REPLACE INTO forum_rating_blocks (guild_id, user_id, reason, blocked_by, created_at)"
+            " VALUES (?, ?, ?, ?, ?)",
+            guild_id,
+            user_id,
+            reason,
+            blocked_by,
+            int(time.time()),
+        )
+
+    async def unblock_rater(self, guild_id: int, user_id: int) -> bool:
+        """Returns False if the member wasn't blocked."""
+        was_blocked = await self.is_rater_blocked(guild_id, user_id)
+        await self._db.execute("DELETE FROM forum_rating_blocks WHERE guild_id = ? AND user_id = ?", guild_id, user_id)
+        return was_blocked
+
+    async def is_rater_blocked(self, guild_id: int, user_id: int) -> bool:
+        row = await self._db.fetch_one(
+            "SELECT 1 FROM forum_rating_blocks WHERE guild_id = ? AND user_id = ?", guild_id, user_id
+        )
+        return row is not None
+
+    async def list_rating_blocks(self, guild_id: int) -> list[RatingBlock]:
+        rows = await self._db.fetch_all(
+            "SELECT user_id, reason, blocked_by FROM forum_rating_blocks WHERE guild_id = ? ORDER BY created_at",
+            guild_id,
+        )
+        return [RatingBlock(int(r[0]), r[1], int(r[2])) for r in rows]

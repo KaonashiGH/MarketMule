@@ -5,7 +5,8 @@ How it works:
     - The button opens the rubric: a 1-10 dropdown per category, plus an optional verdict and note.
     - The rating is posted in the thread under the reviewer's name, in the rubric's format.
     - Each member has one rating per post. Rating again edits their earlier rating.
-    - Members can't rate their own posts, or posts that are closed.
+    - Members can't rate their own posts, posts that are closed, or anything while staff have blocked them.
+    - Staff can remove a rating (Apps → Remove rating). See rating_moderation.py.
     - The average shows on the button message and in the post's top line.
 """
 
@@ -19,6 +20,8 @@ from typing import TYPE_CHECKING
 import discord
 from discord import app_commands, ui
 from discord.ext import commands
+
+from marketmule.core.views import FixAnswersView, blocked_words_message
 
 from .posting import fetch_thread, webhook_username
 from .storage import Binding, MemberRating, Post, RatingSummary
@@ -174,6 +177,12 @@ class RatingView(ui.View):
         if post.status in self.template.final_statuses:
             await interaction.response.send_message("This post is closed, so it can't be rated.", ephemeral=True)
             return
+        if await self.forums.storage.is_rater_blocked(interaction.user.guild.id, interaction.user.id):
+            await interaction.response.send_message(
+                "You've been blocked from rating posts. Contact a staff member if you think this is a mistake.",
+                ephemeral=True,
+            )
+            return
 
         previous = await self.forums.storage.get_rating(post.thread_id, interaction.user.id)
         draft = RatingDraft(self.forums, self.template, post, previous)
@@ -247,6 +256,12 @@ class RatingPage(ui.Modal):
 
     async def on_submit(self, interaction: discord.Interaction) -> None:
         self._collect()
+        has_note = any(item.kind == "note" for item, _ in self.inputs)
+        blocked = self.draft.forums.bot.word_filter.find(self.draft.note) if has_note else []
+        if blocked:
+            reopen = FixAnswersView(lambda: RatingPage(self.draft, self.index))
+            await self._reply(interaction, blocked_words_message(blocked), reopen)
+            return
         if not self.is_last:
             await self._reply(
                 interaction, "Scores saved. One more step.", RatingContinueView(self.draft, self.index + 1)
@@ -324,7 +339,7 @@ async def publish_rating(
     await forums.storage.save_rating(saved)
 
     summary = await forums.storage.rating_summary(thread.id)
-    await _refresh_scores(forums, template, thread, binding, summary)
+    await refresh_scores(forums, template, thread, binding, summary)
     log.info("%s rated %s: %d/%d", reviewer, thread.name, saved.total, rating.max_score)
     return saved
 
@@ -371,7 +386,7 @@ async def _post_or_edit(
     return (await thread.send(content, allowed_mentions=NO_MENTIONS)).id
 
 
-async def _refresh_scores(
+async def refresh_scores(
     forums: ForumsContext, template: Template, thread: discord.Thread, binding: Binding | None, summary: RatingSummary
 ) -> None:
     """Update the average on the rating message and in the post's top line. Failures here are only logged."""

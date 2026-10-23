@@ -15,6 +15,7 @@ Files:
     staff.py      Manage post tool
     status.py     changing a post's status, and the poster's own close button
     ratings.py    member ratings with a rubric, and /leaderboard
+    rating_moderation.py  staff tools: Remove rating, /ratings block, unblock, blocked
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from typing import TYPE_CHECKING
 from .admin import ForumAdmin
 from .context import ForumsContext
 from .forms import FormPanel
+from .rating_moderation import RatingModeration
 from .ratings import Leaderboard, RatingView
 from .staff import ForumStaff
 from .status import AuthorCloseView
@@ -50,3 +52,4 @@ async def setup(bot: MarketMule) -> None:
     await bot.add_cog(ForumAdmin(forums))
     await bot.add_cog(ForumStaff(forums))
     await bot.add_cog(Leaderboard(forums))
+    await bot.add_cog(RatingModeration(forums))

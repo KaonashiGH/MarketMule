@@ -1,1 +1,4 @@
-"""Code shared by every feature. Nothing in here knows about specific features."""
+"""Code shared by every feature: the bot, settings, database, staff checks and blocked words.
+
+Nothing in here knows about specific features.
+"""

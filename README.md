@@ -11,6 +11,8 @@ marketmule/
     forums/      the forums feature (its __init__.py lists what each file does)
 templates/
   forums/        one .json file per form
+config/
+  blocked_words.txt  words the bot won't post
 tests/           automated tests
 deploy/          server files: supervisor config and update script
 run.bat          run the bot on Windows
@@ -29,6 +31,8 @@ Rules: `core/` never imports from `features/`, and features never import from ea
 | `/marketmule status` | Manage Server | Shows loaded features and the staff role. |
 | `/manage` or **Apps → Manage post** | Staff | Changes a post's status or tags. Final statuses lock the post. |
 | `/leaderboard form` | Everyone | Shows the top-rated posts for a form that has a rating rubric. |
+| **Apps → Remove rating** | Staff | On a rating: deletes it and takes its score out of the average and leaderboard. |
+| `/ratings block member [reason]` | Staff | Stops a member from rating. `/ratings unblock` undoes it, `/ratings blocked` lists them. |
 
 To show staff tools to a role without Manage Threads, add it under **Server Settings → Integrations → MarketMule**.
 
@@ -76,6 +80,10 @@ A form with a `rating` block gets a **Rate** button under each new post. Members
 | `leaderboard_min` | Ratings a post needs before it appears in `/leaderboard`. Defaults to 3. |
 
 The rating form fits 5 inputs per page, so larger rubrics are split into steps automatically.
+
+## Blocked words
+
+Discord's AutoMod doesn't check messages the bot posts through webhooks, so the bot checks form answers and rating notes itself. Add words or phrases to `config/blocked_words.txt`, one per line. Capital letters don't matter and only whole words match. If an answer contains one, the member is told which word and can edit their answers without retyping everything. Changes to the list apply without a restart.
 
 ## Running it
 
