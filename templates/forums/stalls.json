@@ -1,0 +1,41 @@
+{
+    
+    "panel" :{
+        "thread_name": "Start here: Open your stall",
+        "title": "",
+        "text": "Want a permanent shop in the server? Click **Open my stall** to get your own post. \n\nYou'll add your CSFloat store Link, your Steam link and your trading rules. Then Manage your items with buttons in your Discord Stall Post. Add items, mark as sold, and bump your stall to the top.\n\n **One Stall per member.** Only CSFloat and steam trade links are accepted. Stalls with no updates for 30 days close automatically, you can reopen yours and time.",
+        "button_label": "Open my stall"
+    },
+
+    "title_format": "[Store] {title}",
+    
+    "post":{
+        "welcome": "WELCOME TO MY STALL",
+        "store_label": "MY CSFloat Store Link",
+        "trade_label":"Steam Trade Link",
+        "negotiation_label":"Negotiation Status",
+        "footer":"Items are listed below, DM seller to trade"
+    },
+
+    "shop": {
+        "items_heading": "🛒ITEMS FOR SALE",
+        "sold_heading": "❌ RECENTLY SOLD",
+        "empty": "No items Listed right now.",
+        "buyout_label": "Butout (B/O)",
+        "status_label": "Status",
+        "Tradable": "✔️Tradeable now",
+        "trade_hold": "🔒 Trade hold until"
+    },
+
+
+    "tags": {"open":"Open", "sold_out": "Sold Out", "closed": "Closed"},
+    "tag_emojis": {"open": "", "Sold Out": "", "Closed": ""},
+
+    "limits": {
+        "recently_sold": 5,
+        "inactive_days": 30,
+        "auto_bump_hours": 6,
+        "manual_bump_hours": 12,
+        "max_hold_days": 30
+    }
+}

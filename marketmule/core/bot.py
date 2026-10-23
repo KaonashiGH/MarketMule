@@ -15,7 +15,6 @@ from marketmule.core.wordfilter import WordFilter
 
 log = logging.getLogger(__name__)
 
-# Features to load at startup. To add one, create marketmule/features/<name>/ and list it here.
 FEATURES: tuple[str, ...] = ("marketmule.features.forums",)
 
 
@@ -59,7 +58,6 @@ class MarketMule(commands.Bot):
         synced = await self.tree.sync(guild=guild)
         log.info("Synced %d commands to server %s", len(synced), self.config.guild_id)
 
-        # Clear global copies so the server doesn't list every command twice.
         self.tree.clear_commands(guild=None)
         await self.tree.sync()
 
