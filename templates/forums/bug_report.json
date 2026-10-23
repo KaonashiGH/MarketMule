@@ -38,10 +38,10 @@
       "fields": [
         {"key": "platform", "type": "select", "label": "Platform",
          "options": ["Web Desktop", "Web Mobile", "Mobile App"]},
-        {"key": "extension", "type": "select", "label": "Extension installed?",
-         "options": ["Yes (Chrome)", "Yes (Firefox)", "No"]},
         {"key": "browser_os", "label": "Browser & OS", "max_length": 100,
          "placeholder": "Chrome 118, Windows 11"},
+        {"key": "version", "label": "Browser/app version", "max_length": 100, "required": false,
+         "placeholder": "Version 155.0.8059.85 (Official Build) (64-bit)"},
         {"key": "steam_link", "label": "Steam profile link (optional)", "max_length": 200, "required": false,
          "placeholder": "https://steamcommunity.com/id/..."},
         {"key": "trade_ref", "label": "Trade ID or item float (optional)", "max_length": 100, "required": false,
