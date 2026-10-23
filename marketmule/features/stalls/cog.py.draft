@@ -17,10 +17,6 @@ from .views import StallPanel, close_stall
 
 
 
-
-
-
-
 If TYPE_CHECKING:
     from .context import StallContex
 

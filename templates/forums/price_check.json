@@ -35,9 +35,9 @@
       "name": "Price Check Continued",
       "title": "Price Check (2/2): Details",
       "fields": [
-        {"key": "features", "type": "select", "tag": true, "label": "Item Features", "max_length": 50},
+        {"key": "features", "type": "select", "tag": true, "label": "Item Features", "max_length": 50,
         "max" : 3, "placeholder": "Pick 3 features that apply to your item",
-        "options": ["Case Hardended", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
+        "options": ["Case Hardened", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
         {"key": "hold", "label": "Provide hold information", "max_length": 50,
          "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
         {"key": "question", "label": "Detail your specific question or concern", "style": "paragraph",
