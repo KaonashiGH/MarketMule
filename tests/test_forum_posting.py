@@ -1,7 +1,14 @@
 from typing import Any, cast
 
 from marketmule.core.config import PROJECT_ROOT
-from marketmule.features.forums.posting import Submission, render, split_message, webhook_username
+from marketmule.features.forums.posting import (
+    Submission,
+    _Answers,
+    render,
+    render_title,
+    split_message,
+    webhook_username,
+)
 from marketmule.features.forums.storage import Binding
 from marketmule.features.forums.templates import load_templates
 
@@ -10,7 +17,7 @@ TEMPLATES = load_templates(PROJECT_ROOT / "templates" / "forums")
 
 def make_submission(template_id: str, choices: dict[str, list[str]], **text: str) -> Submission:
     # render() never touches the author, so a placeholder object is enough here.
-    binding = Binding(channel_id=1, guild_id=1, template_id=template_id, webhook_url=None, panel_thread_id=None)
+    binding = Binding(channel_id=1, guild_id=1, template_ids=(template_id,), webhook_url=None, panel_thread_id=None)
     return Submission(
         template=TEMPLATES[template_id], binding=binding, author=cast(Any, None), text=text, choices=choices
     )
@@ -93,3 +100,33 @@ def test_section_disappears_when_all_its_questions_are_skipped() -> None:
     )
     _, body = body_of(submission)
     assert "### Account & trade" not in body
+
+
+def test_price_check_spreads_details_over_lines() -> None:
+    submission = make_submission(
+        "price_check",
+        {},
+        title="Tier 2 Blue Gem AK",
+        item="AK-47 | Case Hardened",
+        wear="Field-Tested 0.23456",
+        pattern="",
+        link="https://csfloat.com/item/123",
+        hold="Tradable now",
+    )
+    _, body = body_of(submission, number=1)  # the title differs between the standard and detailed forms
+    assert body.startswith("-# 💰 Price Check · Tradable now\n\n### Item\n**Name:** AK-47 | Case Hardened\n")
+    assert body.endswith("Posted by @someone · PC-0001\n\n🔗 https://csfloat.com/item/123")  # link last, above photos
+    assert "Pattern" not in body  # skipped
+    assert "### Stickers" not in body and "### Question" not in body
+
+
+def test_title_drops_skipped_pieces() -> None:
+    answers = _Answers(item="AK-47 | Case Hardened", wear="FT 0.23", pattern="")
+    assert (
+        render_title("[Price Check] - {item} · {wear} · {pattern}", answers)
+        == "[Price Check] - AK-47 | Case Hardened · FT 0.23"
+    )
+
+
+def test_title_is_cut_to_discord_limit() -> None:
+    assert len(render_title("{name}", _Answers(name="x" * 300))) == 100

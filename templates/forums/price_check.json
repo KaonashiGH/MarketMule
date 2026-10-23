@@ -1,0 +1,49 @@
+{
+  "id": "price_check",
+  "name": "Price Check",
+  "type_tag": "Price Check",
+  "id_prefix": "PC",
+  "color": "#e0b12f",
+  "title_format": "[Price Check] - {title}",
+
+  "panel": {
+    "thread_name": "Start here: Price Checks",
+    "title": "How to make a Price Check",
+    "text": "Not sure what your item is worth? Click **Get a Price Check** below.\n\n🔍 **Search this forum first.** If your item is already here, vote on it with 💸 instead of posting a new one.\n\nThe form has two short steps:\n**1. Your Price Check:** a title and your item's details\n**2. Details:** why you need help, plus required pictures\n\nYour post is titled `[Price Check] - Title`, tagged, and posted here for the team to review. Other users can vote with 💸 or ❌.",
+    "button_label": "Get a Price Check",
+    "button_style": "primary"
+  },
+
+  "pages": [
+    {
+      "name": "Your Item",
+      "title": "Price Check (1/2): Your item",
+      "fields": [
+        {"key": "title", "label": "Title", "max_length": 80,
+         "description": "Mention a few details about your item, like the name, type, and condition.",
+         "placeholder": "[mention some details about the item]"},
+        {"key": "item", "label": "Provide the item name", "max_length": 100,
+         "placeholder": "[e.g., AK-47 | Case Hardened]"},
+        {"key": "wear", "label": "Provide the exact wear (Float)", "max_length": 50,
+         "placeholder": "[e.g., Field-Tested 0.23456]"},
+        {"key": "pattern", "label": "Provide the pattern template/seed", "max_length": 50, "required": false,
+         "placeholder": "[e.g., Pattern #441 - skip if not applicable]"},
+        {"key": "stickers", "label": "Provide any sticker info & condition", "style": "paragraph", "max_length": 400,
+         "required": false, "placeholder": "[e.g., 4x Titan Kato 15 - 0% Scraped - skip if not applicable]"}
+      ]
+    },
+    {
+      "name": "Price Check Continued",
+      "title": "Price Check (2/2): Details",
+      "fields": [
+        {"key": "hold", "label": "Provide hold information", "max_length": 50,
+         "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
+        {"key": "question", "label": "Detail your specific question or concern", "style": "paragraph",
+         "max_length": 1000, "required": false,
+         "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
+        {"key": "screenshots", "type": "file", "label": "In-game and CS2 inspect screenshots", "max": 10,
+         "description": "Don't forget to attach your in-game and CS2 inspect menu screenshots before hitting post!"}
+      ]
+    }
+  ],
+

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import time
 from dataclasses import dataclass
 
@@ -44,6 +45,22 @@ MIGRATIONS: tuple[str, ...] = (
 
     ALTER TABLE forum_bindings DROP COLUMN template_id;
     """,
+    # 3: member ratings (one per member per post) and the bot message that shows a post's average.
+    """
+    CREATE TABLE forum_ratings (
+        thread_id  INTEGER NOT NULL,
+        rater_id   INTEGER NOT NULL,
+        scores     TEXT    NOT NULL,
+        total      INTEGER NOT NULL,
+        verdict    TEXT,
+        note       TEXT,
+        message_id INTEGER,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (thread_id, rater_id)
+    );
+
+    ALTER TABLE forum_posts ADD COLUMN rating_message_id INTEGER;
+    """,
 )
 
 
@@ -66,6 +83,36 @@ class Post:
     number: int
     reporter_id: int
     status: str
+
+
+@dataclass(frozen=True)
+class MemberRating:
+    """One member's rating of one post. Rating again replaces it."""
+
+    thread_id: int
+    rater_id: int
+    scores: dict[str, int]
+    verdict: str | None = None
+    note: str | None = None
+    message_id: int | None = None
+
+    @property
+    def total(self) -> int:
+        return sum(self.scores.values())
+
+
+@dataclass(frozen=True)
+class RatingSummary:
+    average: float = 0.0
+    count: int = 0
+
+
+@dataclass(frozen=True)
+class RankedPost:
+    thread_id: int
+    reporter_id: int
+    average: float
+    count: int
 
 
 class ForumStorage:
@@ -165,3 +212,60 @@ class ForumStorage:
     async def count_posts(self, channel_id: int) -> int:
         row = await self._db.fetch_one("SELECT COUNT(*) FROM forum_posts WHERE channel_id = ?", channel_id)
         return int(row[0]) if row else 0
+
+    # Ratings
+
+    async def set_rating_message(self, thread_id: int, message_id: int) -> None:
+        await self._db.execute(
+            "UPDATE forum_posts SET rating_message_id = ? WHERE thread_id = ?", message_id, thread_id
+        )
+
+    async def get_rating_message(self, thread_id: int) -> int | None:
+        row = await self._db.fetch_one("SELECT rating_message_id FROM forum_posts WHERE thread_id = ?", thread_id)
+        return int(row[0]) if row and row[0] else None
+
+    async def get_rating(self, thread_id: int, rater_id: int) -> MemberRating | None:
+        row = await self._db.fetch_one(
+            "SELECT thread_id, rater_id, scores, verdict, note, message_id FROM forum_ratings"
+            " WHERE thread_id = ? AND rater_id = ?",
+            thread_id,
+            rater_id,
+        )
+        if row is None:
+            return None
+        return MemberRating(row[0], row[1], json.loads(row[2]), row[3], row[4], row[5])
+
+    async def save_rating(self, rating: MemberRating) -> None:
+        await self._db.execute(
+            "INSERT OR REPLACE INTO forum_ratings"
+            " (thread_id, rater_id, scores, total, verdict, note, message_id, updated_at)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            rating.thread_id,
+            rating.rater_id,
+            json.dumps(rating.scores),
+            rating.total,
+            rating.verdict,
+            rating.note,
+            rating.message_id,
+            int(time.time()),
+        )
+
+    async def rating_summary(self, thread_id: int) -> RatingSummary:
+        row = await self._db.fetch_one("SELECT AVG(total), COUNT(*) FROM forum_ratings WHERE thread_id = ?", thread_id)
+        if not row or not row[1]:
+            return RatingSummary()
+        return RatingSummary(average=float(row[0]), count=int(row[1]))
+
+    async def top_rated(self, template_id: str, min_ratings: int, limit: int = 10) -> list[RankedPost]:
+        """Highest average first. Ties go to the post with more ratings."""
+        rows = await self._db.fetch_all(
+            "SELECT p.thread_id, p.reporter_id, AVG(r.total) AS average, COUNT(*) AS count"
+            " FROM forum_ratings r JOIN forum_posts p ON p.thread_id = r.thread_id"
+            " WHERE p.template_id = ?"
+            " GROUP BY p.thread_id HAVING COUNT(*) >= ?"
+            " ORDER BY average DESC, count DESC LIMIT ?",
+            template_id,
+            min_ratings,
+            limit,
+        )
+        return [RankedPost(int(r[0]), int(r[1]), float(r[2]), int(r[3])) for r in rows]

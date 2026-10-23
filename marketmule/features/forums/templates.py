@@ -21,6 +21,9 @@ MAX_UPLOADS = 10
 MAX_TAG_NAME = 20
 MAX_FORUM_TAGS = 20
 MAX_POST_TAGS = 5
+MAX_BUTTON_LABEL = 80
+MAX_MESSAGE = 2000
+MAX_CATEGORY_SCORE = 10
 
 FIELD_KINDS = frozenset({"text", "select", "file", "note"})
 
@@ -54,8 +57,11 @@ class Page:
 
 @dataclass(frozen=True)
 class Section:
+    """One part of a post. Leave heading empty for no heading. after_credit puts it below the footer."""
+
     heading: str
     body: str
+    after_credit: bool = False
 
 
 @dataclass(frozen=True)
@@ -65,6 +71,49 @@ class Panel:
     text: str
     button_label: str
     button_style: str = "primary"
+
+
+@dataclass(frozen=True)
+class AuthorClose:
+    """Lets the person who posted close their own post with a button, e.g. "Mark as priced"."""
+
+    status: str
+    button_label: str
+    text: str
+
+
+@dataclass(frozen=True)
+class RatingCategory:
+    """One line of a rating rubric, scored 1-10."""
+
+    key: str
+    label: str
+    description: str | None = None
+
+
+@dataclass(frozen=True)
+class Rating:
+    """Lets members rate a post with a rubric, e.g. the "Loadout Critic" rubric.
+
+    Each category is scored 1-10 from a dropdown. A verdict (pick one option) and a written note
+    are optional extras. A guide adds a "How to review" button that shows reviewers some tips.
+    """
+
+    title: str
+    button_label: str
+    categories: tuple[RatingCategory, ...]
+    emoji: str = "⭐"
+    verdict_label: str | None = None
+    verdict_options: tuple[str, ...] = ()
+    note_label: str | None = None
+    note_placeholder: str | None = None
+    note_required: bool = True
+    guide: str | None = None
+    leaderboard_min: int = 3
+
+    @property
+    def max_score(self) -> int:
+        return MAX_CATEGORY_SCORE * len(self.categories)
 
 
 @dataclass(frozen=True)
@@ -84,6 +133,8 @@ class Template:
     reactions: tuple[str, ...]
     header: tuple[str, ...] = ()
     credit: str = "Submitted by"
+    author_close: AuthorClose | None = None
+    rating: Rating | None = None
 
     @property
     def fields(self) -> list[Field]:
@@ -163,6 +214,26 @@ def _parse_template(raw: dict[str, Any]) -> Template:
         reactions=tuple(raw.get("reactions", ())),
         header=tuple(raw.get("header", ())),
         credit=raw.get("credit", "Submitted by"),
+        author_close=AuthorClose(**raw["author_close"]) if raw.get("author_close") else None,
+        rating=_parse_rating(raw["rating"]) if raw.get("rating") else None,
+    )
+
+
+def _parse_rating(raw: dict[str, Any]) -> Rating:
+    verdict = raw.get("verdict") or {}
+    note = raw.get("note") or {}
+    return Rating(
+        title=raw["title"],
+        button_label=raw["button_label"],
+        categories=tuple(RatingCategory(**c) for c in raw["categories"]),
+        emoji=raw.get("emoji", "⭐"),
+        verdict_label=verdict.get("label"),
+        verdict_options=tuple(verdict.get("options", ())),
+        note_label=note.get("label"),
+        note_placeholder=note.get("placeholder"),
+        note_required=note.get("required", True),
+        guide=raw.get("guide"),
+        leaderboard_min=raw.get("leaderboard_min", 3),
     )
 
 
@@ -201,6 +272,18 @@ def _validate(template: Template) -> list[str]:
     used += [("header", k) for k in template.header]
     errors += [f"{where} uses {{{key}}}, but no question has that key" for where, key in used if key not in known]
 
+    close = template.author_close
+    if close is not None:
+        if close.status not in template.statuses:
+            errors.append(f"author_close status {close.status!r} is not listed in statuses")
+        if not 1 <= len(close.button_label) <= MAX_BUTTON_LABEL:
+            errors.append(f"author_close button_label needs 1-{MAX_BUTTON_LABEL} characters")
+        if not 1 <= len(close.text) <= MAX_MESSAGE:
+            errors.append(f"author_close text needs 1-{MAX_MESSAGE} characters")
+
+    if template.rating is not None:
+        errors += _validate_rating(template.rating)
+
     unknown = template.final_statuses - set(template.statuses)
     if unknown:
         errors.append(f"final_statuses not listed in statuses: {sorted(unknown)}")
@@ -228,4 +311,35 @@ def _validate_field(field: Field) -> list[str]:
         errors.append(f"dropdown {name!r} needs 1-{MAX_SELECT_OPTIONS} options")
     if field.kind == "file" and not 1 <= field.max_values <= MAX_UPLOADS:
         errors.append(f"upload {name!r} allows 1-{MAX_UPLOADS} files")
+    return errors
+
+
+def _validate_rating(rating: Rating) -> list[str]:
+    errors = []
+    if not rating.categories:
+        errors.append("rating needs at least one category")
+    keys = [c.key for c in rating.categories]
+    errors += [f"rating has duplicate category key {k!r}" for k in sorted({k for k in keys if keys.count(k) > 1})]
+    for category in rating.categories:
+        if not category.key:
+            errors.append(f"rating category {category.label!r} is missing a key")
+        if not 1 <= len(category.label) <= MAX_LABEL:
+            errors.append(f"rating category {category.key!r} needs a label of 1-{MAX_LABEL} characters")
+        if category.description and len(category.description) > MAX_DESCRIPTION:
+            errors.append(f"rating category {category.key!r} description is over {MAX_DESCRIPTION} characters")
+    if not 1 <= len(rating.button_label) <= MAX_BUTTON_LABEL:
+        errors.append(f"rating button_label needs 1-{MAX_BUTTON_LABEL} characters")
+    if rating.verdict_label is not None:
+        if len(rating.verdict_label) > MAX_LABEL:
+            errors.append(f"rating verdict label is over {MAX_LABEL} characters")
+        if not 2 <= len(rating.verdict_options) <= MAX_SELECT_OPTIONS:
+            errors.append(f"rating verdict needs 2-{MAX_SELECT_OPTIONS} options")
+    if rating.note_label is not None and len(rating.note_label) > MAX_LABEL:
+        errors.append(f"rating note label is over {MAX_LABEL} characters")
+    if rating.note_placeholder and len(rating.note_placeholder) > MAX_PLACEHOLDER:
+        errors.append(f"rating note placeholder is over {MAX_PLACEHOLDER} characters")
+    if rating.guide and len(rating.guide) > MAX_MESSAGE:
+        errors.append(f"rating guide is over {MAX_MESSAGE} characters")
+    if rating.leaderboard_min < 1:
+        errors.append("rating leaderboard_min must be at least 1")
     return errors

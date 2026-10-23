@@ -13,8 +13,9 @@ from marketmule.core.staff import is_staff
 
 from .forms import build_select
 from .posting import fetch_thread
+from .status import set_status
 from .storage import Post
-from .tags import find_tag, find_tags, set_thread_tags
+from .tags import find_tags, set_thread_tags
 from .templates import MAX_POST_TAGS, Template
 
 if TYPE_CHECKING:
@@ -59,37 +60,13 @@ class ManagePostModal(ui.Modal, title="Manage post"):
 
         new_status = self.status.values[0] if self.status.values else self.post.status
         if new_status != self.post.status:
-            changes.append(await self._set_status(interaction.user, new_status))
+            changes.append(await set_status(self.forums, self.post, self.template, interaction.user, new_status))
 
         selected = {key: list(select.values) for key, select in self.tag_selects}
         if any(sorted(picked) != self.original_tags.get(key, []) for key, picked in selected.items()):
             changes.append(await self._set_tags(selected))
 
         await interaction.followup.send("\n".join(changes) or "No changes made.", ephemeral=True)
-
-    async def _set_status(self, staff: discord.Member, status: str) -> str:
-        thread = await fetch_thread(staff.guild, self.post.thread_id)
-        if thread.archived or thread.locked:
-            thread = await thread.edit(archived=False, locked=False)
-
-        kept = [tag for tag in thread.applied_tags if tag.name not in self.template.statuses]
-        status_tag = find_tag(thread.parent, status) if isinstance(thread.parent, discord.ForumChannel) else None
-        tags = [*kept[: MAX_POST_TAGS - 1], status_tag] if status_tag else kept
-        thread = await thread.edit(applied_tags=tags)
-
-        await thread.send(
-            f"{staff.mention} set the status to **{status}**. <@{self.post.reporter_id}>",
-            allowed_mentions=discord.AllowedMentions(
-                everyone=False, roles=False, users=[discord.Object(self.post.reporter_id)]
-            ),
-        )
-
-        closing = status in self.template.final_statuses
-        if closing:
-            await thread.edit(locked=True, archived=True)
-        await self.forums.storage.set_post_status(thread.id, status)
-        log.info("%s set %s to %s", staff, thread.name, status)
-        return f"Status set to **{status}**" + (" and the post is now locked." if closing else ".")
 
     async def _set_tags(self, selected: dict[str, list[str]]) -> str:
         thread = await fetch_thread(self.thread.guild, self.post.thread_id)

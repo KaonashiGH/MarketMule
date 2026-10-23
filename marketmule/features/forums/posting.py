@@ -61,12 +61,25 @@ def render(submission: Submission, *, number: int, author_mention: str) -> tuple
     """
     template = submission.template
     answers = submission.answers()
-    title = template.title_format.format_map(answers)[:MAX_THREAD_NAME]
+    title = render_title(template.title_format, answers)
 
+    rendered = [(section, block) for section in template.sections if (block := _render_section(section, answers))]
     blocks = [_header_line(template, answers)]
-    blocks += [block for section in template.sections if (block := _render_section(section, answers))]
+    blocks += [block for section, block in rendered if not section.after_credit]
     blocks.append(f"-# {template.credit} {author_mention} · {template.id_prefix}-{number:04d}")
+    # Sections marked after_credit (like a link) sit at the very end, right above any images.
+    blocks += [block for section, block in rendered if section.after_credit]
     return title, split_message(blocks)
+
+
+TITLE_SEPARATOR = " · "
+
+
+def render_title(title_format: str, answers: dict[str, str]) -> str:
+    """Fill in the title. Pieces separated by " · " are dropped when all their answers were skipped."""
+    pieces = title_format.split(TITLE_SEPARATOR)
+    kept = [p for p in pieces if not (keys := PLACEHOLDER.findall(p)) or any(answers[k] for k in keys)]
+    return TITLE_SEPARATOR.join(p.format_map(answers) for p in kept)[:MAX_THREAD_NAME]
 
 
 def _header_line(template: Template, answers: dict[str, str]) -> str:
@@ -85,7 +98,9 @@ def _render_section(section: Section, answers: dict[str, str]) -> str | None:
             continue
         lines.append(line.format_map(answers))
     body = "\n".join(lines).strip()
-    return f"### {section.heading}\n{body}" if body else None
+    if not body:
+        return None
+    return f"### {section.heading}\n{body}" if section.heading else body
 
 
 def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT) -> list[str]:

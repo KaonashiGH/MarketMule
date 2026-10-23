@@ -10,6 +10,8 @@ import discord
 from discord import ui
 
 from .posting import Submission, publish
+from .ratings import offer_rating
+from .status import offer_author_close
 from .templates import Field, Template
 
 if TYPE_CHECKING:
@@ -150,6 +152,8 @@ class FormPage(ui.Modal):
         await self._reply(interaction, f"**{template.name}**: posting…", None)
         try:
             thread = await publish(self.forums, self.submission)
+            await offer_author_close(self.forums, template, thread)
+            await offer_rating(self.forums, template, thread)
         except Exception:
             log.exception("Failed to publish %s for %s", template.id, interaction.user)
             await interaction.edit_original_response(

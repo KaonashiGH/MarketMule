@@ -28,6 +28,7 @@ Rules: `core/` never imports from `features/`, and features never import from ea
 | `/marketmule staffrole role` | Manage Server | Sets the staff role for every feature. |
 | `/marketmule status` | Manage Server | Shows loaded features and the staff role. |
 | `/manage` or **Apps → Manage post** | Staff | Changes a post's status or tags. Final statuses lock the post. |
+| `/leaderboard form` | Everyone | Shows the top-rated posts for a form that has a rating rubric. |
 
 To show staff tools to a role without Manage Threads, add it under **Server Settings → Integrations → MarketMule**.
 
@@ -52,11 +53,29 @@ Each file in `templates/forums/` is one form. The main keys:
 | `sections` | Headings and body of the post. `{key}` inserts an answer. Skipped questions are hidden. |
 | `credit` | Footer wording, e.g. "Reported by". |
 | `statuses`, `final_statuses` | Staff-only status tags, and which ones close a post. |
+| `author_close` | Optional. A button in each new post that lets its author close it, e.g. "Mark as priced". Set `status`, `button_label` and `text`. |
+| `rating` | Optional. A rubric members use to rate posts. See "Ratings" below. |
 | `tag_emojis`, `reactions` | Emoji on tags, and reactions added to new posts. |
 
 Question types: `text` (add `"style": "paragraph"` for long answers), `select` (a dropdown; add `"tag": true` to make the answer a tag), `file` (an upload box) and `note` (text only).
 
 The bot checks every form against Discord's limits when it starts and refuses to start if one is invalid, naming the problem. After editing, deploy, then run `/forums setup` again on that channel to refresh its pinned post.
+
+## Ratings
+
+A form with a `rating` block gets a **Rate** button under each new post. Members score each category 1-10, and the bot posts the rating in the thread under their name and keeps an average on the post. Each member gets one rating per post (rating again updates it), and members can't rate their own posts or closed ones.
+
+| Key | What it controls |
+| --- | --- |
+| `title` | First line of each posted rating, e.g. "LOADOUT LAB RATING". |
+| `button_label`, `emoji` | The Rate button. The emoji also marks the average. |
+| `categories` | One `{"key", "label", "description"}` per scored line. Each is worth 10 points. |
+| `verdict` | Optional. `{"label", "options"}` for a pick-one verdict, e.g. SEND IT / SAVE YOUR MONEY. |
+| `note` | Optional. `{"label", "placeholder", "required"}` for a written note. |
+| `guide` | Optional. Text shown privately by a "How to review" button. |
+| `leaderboard_min` | Ratings a post needs before it appears in `/leaderboard`. Defaults to 3. |
+
+The rating form fits 5 inputs per page, so larger rubrics are split into steps automatically.
 
 ## Running it
 
