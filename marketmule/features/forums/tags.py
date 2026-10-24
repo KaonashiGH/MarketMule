@@ -22,6 +22,12 @@ def find_tag(forum: discord.ForumChannel, name: str) -> discord.ForumTag | None:
     return next((tag for tag in forum.available_tags if tag.name.lower() == name), None)
 
 
+def status_first(tags: Sequence[discord.ForumTag], statuses: Iterable[str]) -> list[discord.ForumTag]:
+    """Put status tags in front, keeping everything else in order. The status should always be the first tag."""
+    names = {name.lower() for name in statuses}
+    return sorted(tags, key=lambda tag: tag.name.lower() not in names)  # sorted() keeps ties in order
+
+
 def find_tags(forum: discord.ForumChannel, names: Iterable[str]) -> list[discord.ForumTag]:
     tags: list[discord.ForumTag] = []
     for name in names:
@@ -63,8 +69,10 @@ async def sync_forum_tags(forum: discord.ForumChannel, templates: Sequence[Templ
     if not isinstance(refreshed, discord.ForumChannel):
         raise RuntimeError(f"Channel {forum.id} is no longer a forum")
 
-    tags = list(refreshed.available_tags)
-    changed = False
+    # Status tags go first in the forum's list too, so Discord shows them first on every post.
+    statuses = [status for template in templates for status in template.statuses]
+    tags = status_first(refreshed.available_tags, statuses)
+    changed = tags != list(refreshed.available_tags)
     for tag in tags:
         emoji = emojis.get(tag.name.lower())
         if emoji and str(tag.emoji or "") != emoji:

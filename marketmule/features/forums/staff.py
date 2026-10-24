@@ -15,7 +15,7 @@ from .forms import build_select
 from .posting import fetch_thread
 from .status import set_status
 from .storage import Post
-from .tags import find_tags, set_thread_tags
+from .tags import find_tags, set_thread_tags, status_first
 from .templates import MAX_POST_TAGS, Template
 
 if TYPE_CHECKING:
@@ -77,7 +77,8 @@ class ManagePostModal(ui.Modal, title="Manage post"):
         dropdown_tags = {option for f in self.template.tag_fields for option in f.options}
         kept = [tag for tag in thread.applied_tags if tag.name not in dropdown_tags]
         chosen = find_tags(forum, [name for names in selected.values() for name in names])
-        thread = await set_thread_tags(thread, (kept + chosen)[:MAX_POST_TAGS])
+        tags = status_first(kept + chosen, self.template.statuses)[:MAX_POST_TAGS]  # status stays first
+        thread = await set_thread_tags(thread, tags)
         return "Tags updated: " + ", ".join(tag.name for tag in thread.applied_tags)
 
     async def on_error(self, interaction: discord.Interaction, error: Exception, /) -> None:

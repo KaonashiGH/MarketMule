@@ -37,7 +37,7 @@ async def set_status(forums: ForumsContext, post: Post, template: Template, acto
 
     kept = [tag for tag in thread.applied_tags if tag.name not in template.statuses]
     status_tag = find_tag(thread.parent, status) if isinstance(thread.parent, discord.ForumChannel) else None
-    tags = [*kept[: MAX_POST_TAGS - 1], status_tag] if status_tag else kept
+    tags = [status_tag, *kept[: MAX_POST_TAGS - 1]] if status_tag else kept  # status always comes first
     thread = await thread.edit(applied_tags=tags)
 
     if actor.id == post.reporter_id:

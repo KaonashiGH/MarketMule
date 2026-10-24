@@ -263,7 +263,7 @@ async def publish(forums: ForumsContext, submission: Submission) -> discord.Thre
 
     status_tag = find_tag(forum, template.initial_status)
     if status_tag is not None:
-        thread = await thread.edit(applied_tags=[*thread.applied_tags[: MAX_POST_TAGS - 1], status_tag])
+        thread = await thread.edit(applied_tags=[status_tag, *thread.applied_tags[: MAX_POST_TAGS - 1]])
 
     for emoji in template.reactions:
         try:

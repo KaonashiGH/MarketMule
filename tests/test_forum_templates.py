@@ -63,3 +63,16 @@ def test_rejects_close_button_with_unknown_status(tmp_path: Path) -> None:
     write_template(tmp_path, author_close={"status": "Done", "button_label": "Close", "text": "Close it"})
     with pytest.raises(TemplateError, match="author_close status 'Done'"):
         load_templates(tmp_path)
+
+
+def test_status_tag_always_comes_first() -> None:
+    from typing import Any, cast
+
+    from marketmule.features.forums.tags import status_first
+
+    def tag(name: str) -> Any:
+        return cast(Any, type("Tag", (), {"name": name})())
+
+    tags = [tag("Fade"), tag("Price Check"), tag("Needs pricing"), tag("Doppler")]
+    ordered = status_first(tags, ["Needs pricing", "Priced", "Closed"])
+    assert [t.name for t in ordered] == ["Needs pricing", "Fade", "Price Check", "Doppler"]
