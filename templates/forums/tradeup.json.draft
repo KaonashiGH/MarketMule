@@ -39,7 +39,7 @@
 
   "header": ["goal"],
   "style": "card",
-  "thumbnail": true,
+  "thumbnail": false,
   "banner": "tradeup",
   "icon": "mm_tradeup",
   "card_title": "{target}",

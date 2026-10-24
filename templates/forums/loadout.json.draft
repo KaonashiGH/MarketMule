@@ -39,7 +39,7 @@
 
   "header": ["budget"],
   "style": "card",
-  "thumbnail": true,
+  "thumbnail": false,
   "banner": "loadout",
   "icon": "mm_loadout",
   "card_title": "{theme}",

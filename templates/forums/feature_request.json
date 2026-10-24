@@ -53,7 +53,7 @@
 
   "header": ["area", "platform", "category"],
   "style": "card",
-  "thumbnail": true,
+  "thumbnail": false,
   "banner": "feature",
   "icon": "mm_feature",
   "card_title": "{summary}",

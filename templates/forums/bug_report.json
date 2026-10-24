@@ -65,7 +65,7 @@
 
   "header": ["area", "platform", "category"],
   "style": "card",
-  "thumbnail": true,
+  "thumbnail": false,
   "banner": "bug",
   "icon": "mm_bug",
   "card_title": "{summary}",
