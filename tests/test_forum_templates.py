@@ -10,13 +10,15 @@ FORUM_TEMPLATES = PROJECT_ROOT / "templates" / "forums"
 
 
 def test_shipped_templates_are_valid() -> None:
-    templates = load_templates(FORUM_TEMPLATES)
-    assert set(templates) == {"bug_report", "feature_request", "loadout", "price_check", "tradeup"}
+    templates = load_templates(FORUM_TEMPLATES)  # raises, naming the file, if any .json form is broken
+    assert {"bug_report", "feature_request", "price_check"} <= set(templates)
 
 
 def test_loadout_and_tradeup_fit_in_one_channel() -> None:
     """They share #loadout-lab-and-tradeups, so together they must stay within Discord's 20 tags per forum."""
     templates = load_templates(FORUM_TEMPLATES)
+    if not {"loadout", "tradeup"} <= set(templates):
+        pytest.skip("loadout or tradeup is drafted (.draft)")
     names = {name.lower() for t in ("loadout", "tradeup") for name, _ in templates[t].forum_tags()}
     assert len(names) <= MAX_FORUM_TAGS
 

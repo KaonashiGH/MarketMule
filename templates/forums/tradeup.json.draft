@@ -1,0 +1,77 @@
+{
+  "id": "tradeup",
+  "name": "Trade-up",
+  "type_tag": "Trade-up",
+  "id_prefix": "TRADE",
+  "color": "#3a9b6f",
+  "title_format": "[Trade-Up] - {target} - {chance}",
+
+  "panel": {
+    "thread_name": "Start here: Trade-up help",
+    "title": "🔁 Trade-Ups",
+    "text": "Want a second opinion on a trade-up? Run it through the **CSFloat Trade-Up Calculator**, take a full screenshot, then click **Post a trade-up**.\n\nTell the community your goal and what you need checked. Your post is titled `[Trade-Up] - Target skin - % chance to profit`.",
+    "button_label": "Post a trade-up",
+    "button_style": "primary"
+  },
+
+  "pages": [
+    {
+      "name": "Your trade-up",
+      "title": "Trade-Up",
+      "fields": [
+        {"key": "target", "label": "Target outcome skin", "max_length": 50,
+         "description": "Your post will be titled: [Trade-Up] - Target skin - % chance",
+         "placeholder": "AWP | Asiimov"},
+        {"key": "chance", "label": "Chance to profit", "max_length": 10,
+         "description": "The % chance to profit shown in the calculator",
+         "placeholder": "45%"},
+        {"key": "goal", "type": "select", "tag": true, "label": "Your goal",
+         "description": "Steady profit over volume, or a high-risk shot at a specific skin?",
+         "options": ["Profit (+EV)", "Gamble for a skin"]},
+        {"key": "screenshot", "type": "file", "label": "Trade-Up Calculator screenshot", "max": 3,
+         "description": "A full screenshot from the CSFloat Trade-Up Calculator"},
+        {"key": "question", "label": "What should the community check? (optional)", "style": "paragraph", "max_length": 1000, "required": false,
+         "description": "State your question or concern about this trade-up.",
+         "placeholder": "Are my input floats low enough to hit Factory New?"}
+      ]
+    }
+  ],
+
+  "header": ["goal"],
+  "style": "card",
+  "thumbnail": true,
+  "banner": "tradeup",
+  "icon": "mm_tradeup",
+  "card_title": "{target}",
+  "sections": [
+    {"heading": "Chance to profit", "body": "> {chance}"},
+    {"heading": "What I need checked", "body": "> {question}"}
+  ],
+  "credit": "Posted by",
+
+  "statuses": ["Open", "Solved", "Closed"],
+  "final_statuses": ["Closed"],
+  "tag_emojis": {"Trade-up": "🔁", "Open": "🔵", "Solved": "🟢", "Closed": "⚫"},
+  "reactions": [],
+
+  "rating": {
+    "title": "TRADE-UP CONTRACT RATING",
+    "button_label": "Rate this trade-up",
+    "emoji": "🧮",
+    "categories": [
+      {"key": "float", "label": "Float Optimization",
+       "description": "Did you calculate the wear bands perfectly?"},
+      {"key": "risk", "label": "Risk vs. Reward",
+       "description": "Is the Expected Value (EV) positive, or is this a smart gamble?"},
+      {"key": "filler", "label": "Filler Efficiency",
+       "description": "Did you pick the absolute cheapest collection skins for your fillers?"},
+      {"key": "hype", "label": "The Hype Factor",
+       "description": "How exciting is this? (1 = Boring $2 trade-up. 10 = High Roller)"}
+    ],
+    "verdict": {"label": "Critic's Verdict", "options": ["SEND IT", "SAVE YOUR MONEY"]},
+    "note": {"label": "Critic's Note",
+             "placeholder": "e.g. Swap your two FT fillers for MW from the Bank Collection to guarantee an FN outcome."},
+    "guide": "## 📘 How to review a trade-up\nIf you're new to reviewing trade-ups, keep these mechanics in mind when grading a post:\n\n**Expected Value (EV):** the probability-weighted average of all possible skin outcomes. If a trade-up costs $50 to execute and the EV is $55, it is statistically profitable over time. If the EV is $40, it is a mathematical loss.\n\n**Float Math:** CS2 determines the exact wear of the output skin by averaging the float of the 10 inputs and mapping it to the possible range of the output skin. This is why submitters must use exact floats. A difference of 0.01 can drop an output skin from Factory New down to Minimal Wear, destroying the profit.\n\n**Filler Skins:** traders often use cheap skins from older, undesirable collections as \"fillers\" to lower the total cost of the contract or pull the average float down. The tradeoff is that every filler adds a 10% risk that the output skin will come from the cheap filler collection instead of the target collection.",
+    "leaderboard_min": 3
+  }
+}

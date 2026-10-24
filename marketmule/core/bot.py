@@ -11,10 +11,12 @@ from discord.ext import commands
 from marketmule.core.admin import CoreAdmin
 from marketmule.core.config import Config
 from marketmule.core.database import Database
+from marketmule.core.icons import Icons
 from marketmule.core.wordfilter import WordFilter
 
 log = logging.getLogger(__name__)
 
+# Features to load at startup. To add one, create marketmule/features/<name>/ and list it here.
 FEATURES: tuple[str, ...] = ("marketmule.features.forums",)
 
 
@@ -38,9 +40,11 @@ class MarketMule(commands.Bot):
         self.config = config
         self.db = Database(config.database_path)
         self.word_filter = WordFilter(config.blocked_words_path)
+        self.icons = Icons(config.icons_dir)
 
     async def setup_hook(self) -> None:
         await self.db.connect()
+        await self.icons.load(self)
         await self.add_cog(CoreAdmin(self))
         for feature in FEATURES:
             await self.load_extension(feature)
@@ -58,6 +62,7 @@ class MarketMule(commands.Bot):
         synced = await self.tree.sync(guild=guild)
         log.info("Synced %d commands to server %s", len(synced), self.config.guild_id)
 
+        # Clear global copies so the server doesn't list every command twice.
         self.tree.clear_commands(guild=None)
         await self.tree.sync()
 

@@ -23,6 +23,8 @@ from marketmule.features.forums.templates import TemplateError, load_templates
 
 FORUM_TEMPLATES = PROJECT_ROOT / "templates" / "forums"
 TEMPLATES = load_templates(FORUM_TEMPLATES)
+if not {"loadout", "tradeup"} <= set(TEMPLATES):
+    pytest.skip("loadout or tradeup is drafted (.draft)", allow_module_level=True)
 LOADOUT = TEMPLATES["loadout"]
 TRADEUP = TEMPLATES["tradeup"]
 
@@ -236,3 +238,33 @@ def test_blocking_members_from_rating(tmp_path: Path) -> None:
 def test_removing_the_last_rating_clears_the_score() -> None:
     rating = rating_of("loadout")
     assert with_score("-# 🎨 Loadout · $1,500 · ⭐ 30/40", rating, RatingSummary()) == "-# 🎨 Loadout · $1,500"
+
+
+def test_card_posts_show_the_score_in_their_small_line() -> None:
+    import asyncio
+
+    from marketmule.features.forums.posting import Submission, render_card
+    from marketmule.features.forums.ratings import add_score_to_card
+    from marketmule.features.forums.storage import Binding
+
+    binding = Binding(channel_id=1, guild_id=1, template_ids=("loadout",), webhook_url=None, panel_thread_id=None)
+    submission = Submission(
+        template=LOADOUT,
+        binding=binding,
+        author=cast(Any, None),
+        text={"theme": "Pink", "budget": "$1,500", "link": "https://x.y/z", "vision": "Pink"},
+    )
+    rating = LOADOUT.rating
+    assert rating is not None
+
+    async def scenario() -> tuple[str, bool]:
+        card = render_card(submission, number=1, author_mention="@someone")
+        assert card is not None
+        assert add_score_to_card(card, rating, RatingSummary(31.5, 2))
+        unchanged = add_score_to_card(card, rating, RatingSummary(31.5, 2))
+        first = next(i for i in card.walk_children() if isinstance(i, ui.TextDisplay))
+        return first.content, unchanged
+
+    content, unchanged = asyncio.run(scenario())
+    assert content.endswith("-# Loadout · $1,500 · ⭐ 31.5/40")
+    assert not unchanged

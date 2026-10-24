@@ -64,12 +64,17 @@
   ],
 
   "header": ["area", "platform", "category"],
+  "style": "card",
+  "thumbnail": true,
+  "banner": "bug",
+  "icon": "mm_bug",
+  "card_title": "{summary}",
   "sections": [
-    {"heading": "Description", "body": "{description}"},
-    {"heading": "Steps to reproduce", "body": "{steps}"},
-    {"heading": "Expected vs. actual", "body": "{expected_actual}"},
-    {"heading": "Setup", "body": "**Platform:** {platform}\n**Browser & OS:** {browser_os}"},
-    {"heading": "Account & trade", "body": "**Steam profile:** {steam_link}\n**Trade ID / float:** {trade_ref}"}
+    {"heading": "Description", "body": "> {description}"},
+    {"heading": "Steps to reproduce", "body": "> {steps}"},
+    {"heading": "Expected vs. actual", "body": "> {expected_actual}"},
+    {"heading": "Setup", "body": "> **Browser & OS:** {browser_os}\n> **Version:** {version}", "divider": true},
+    {"heading": "Account & trade", "body": "> **Steam profile:** {steam_link}\n> **Trade ID / float:** {trade_ref}"}
   ],
   "credit": "Reported by",
 

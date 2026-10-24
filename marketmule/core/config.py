@@ -28,6 +28,16 @@ class Config:
         return self.project_root / "config" / "blocked_words.txt"
 
     @property
+    def icons_dir(self) -> Path:
+        """PNG icons uploaded as the bot's app emojis by /marketmule icons."""
+        return self.project_root / "assets" / "icons"
+
+    @property
+    def banners_dir(self) -> Path:
+        """Banner images for Start here posts (and posts, if a form turns that on), e.g. pricecheck.png."""
+        return self.project_root / "assets" / "banners"
+
+    @property
     def templates_dir(self) -> Path:
         """Each feature keeps its templates in a subfolder, e.g. templates/forums/."""
         return self.project_root / "templates"

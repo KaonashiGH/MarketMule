@@ -1,4 +1,4 @@
-"""Server-wide settings commands: /marketmule staffrole, /marketmule status."""
+"""Server-wide settings commands: /marketmule staffrole, /marketmule icons, /marketmule status."""
 
 from __future__ import annotations
 
@@ -34,6 +34,21 @@ class CoreAdmin(commands.GroupCog, group_name="marketmule", group_description="M
             allowed_mentions=discord.AllowedMentions.none(),
         )
 
+    @app_commands.command(name="icons", description="Upload MarketMule's icons as the bot's emojis")
+    async def icons(self, interaction: discord.Interaction) -> None:
+        if not self.bot.icons.files():
+            await interaction.response.send_message("No icons found in `assets/icons/`.", ephemeral=True)
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        uploaded, failed = await self.bot.icons.upload_missing(self.bot)
+        lines = [
+            f"Uploaded **{len(uploaded)}** new icons. The bot now has **{len(self.bot.icons)}**.",
+            "New posts use them right away. Run `/forums setup` again to refresh Start here posts.",
+        ]
+        if failed:
+            lines.append("Couldn't upload: " + ", ".join(failed))
+        await interaction.followup.send("\n".join(lines), ephemeral=True)
+
     @app_commands.command(name="status", description="Show the bot's loaded features and settings")
     async def status(self, interaction: discord.Interaction) -> None:
         if interaction.guild is None:
@@ -41,7 +56,8 @@ class CoreAdmin(commands.GroupCog, group_name="marketmule", group_description="M
         role_id = await get_staff_role(self.bot.db, interaction.guild.id)
         features = ", ".join(name.rsplit(".", 1)[-1] for name in self.bot.extensions) or "none"
         await interaction.response.send_message(
-            f"**Features:** {features}\n**Staff role:** {f'<@&{role_id}>' if role_id else 'not set'}",
+            f"**Features:** {features}\n**Staff role:** {f'<@&{role_id}>' if role_id else 'not set'}\n"
+            f"**Icons:** {len(self.bot.icons)} uploaded",
             ephemeral=True,
             allowed_mentions=discord.AllowedMentions.none(),
         )

@@ -26,6 +26,7 @@ MAX_MESSAGE = 2000
 MAX_CATEGORY_SCORE = 10
 
 FIELD_KINDS = frozenset({"text", "select", "file", "note"})
+POST_STYLES = frozenset({"text", "card"})
 
 
 class TemplateError(Exception):
@@ -57,11 +58,23 @@ class Page:
 
 @dataclass(frozen=True)
 class Section:
-    """One part of a post. Leave heading empty for no heading. after_credit puts it below the footer."""
+    """One part of a post. Leave heading empty for no heading. after_credit puts it below the footer.
+
+    divider draws a line above the section (card posts only).
+    """
 
     heading: str
     body: str
     after_credit: bool = False
+    divider: bool = False
+
+
+@dataclass(frozen=True)
+class LinkButton:
+    """Card posts: turns one answer (a link) into a button, e.g. "View on CSFloat"."""
+
+    key: str
+    label: str
 
 
 @dataclass(frozen=True)
@@ -135,6 +148,22 @@ class Template:
     credit: str = "Submitted by"
     author_close: AuthorClose | None = None
     rating: Rating | None = None
+    style: str = "text"
+    icon: str | None = None
+    card_title: str | None = None
+    link_button: LinkButton | None = None
+    thumbnail: bool = False
+    banner: str | None = None
+    banner_on_posts: bool = False
+
+    @property
+    def banner_filename(self) -> str | None:
+        """The name the banner is attached under, e.g. banner-price_check.png."""
+        return f"banner-{self.id}.png" if self.banner else None
+
+    @property
+    def is_card(self) -> bool:
+        return self.style == "card"
 
     @property
     def fields(self) -> list[Field]:
@@ -216,6 +245,13 @@ def _parse_template(raw: dict[str, Any]) -> Template:
         credit=raw.get("credit", "Submitted by"),
         author_close=AuthorClose(**raw["author_close"]) if raw.get("author_close") else None,
         rating=_parse_rating(raw["rating"]) if raw.get("rating") else None,
+        style=raw.get("style", "text"),
+        icon=raw.get("icon"),
+        card_title=raw.get("card_title"),
+        link_button=LinkButton(**raw["link_button"]) if raw.get("link_button") else None,
+        thumbnail=raw.get("thumbnail", False),
+        banner=raw.get("banner"),
+        banner_on_posts=raw.get("banner_on_posts", False),
     )
 
 
@@ -270,7 +306,17 @@ def _validate(template: Template) -> list[str]:
     used = [("title_format", k) for k in PLACEHOLDER.findall(template.title_format)]
     used += [(f"section {s.heading!r}", k) for s in template.sections for k in PLACEHOLDER.findall(s.body)]
     used += [("header", k) for k in template.header]
+    used += [("card_title", k) for k in PLACEHOLDER.findall(template.card_title or "")]
+    if template.link_button is not None:
+        used.append(("link_button", template.link_button.key))
     errors += [f"{where} uses {{{key}}}, but no question has that key" for where, key in used if key not in known]
+
+    if template.style not in POST_STYLES:
+        errors.append(f"style must be one of {sorted(POST_STYLES)}, not {template.style!r}")
+    if template.banner is not None and not re.fullmatch(r"[\w-]+", template.banner):
+        errors.append(f'banner should be a file name without .png, like "pricecheck", not {template.banner!r}')
+    if template.link_button is not None and not 1 <= len(template.link_button.label) <= MAX_BUTTON_LABEL:
+        errors.append(f"link_button label needs 1-{MAX_BUTTON_LABEL} characters")
 
     close = template.author_close
     if close is not None:

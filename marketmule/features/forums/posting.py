@@ -4,10 +4,15 @@ from __future__ import annotations
 
 import logging
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import discord
+from discord import ui
+
+from marketmule.core.icons import Icons
 
 from .storage import Binding, Post
 from .tags import find_tag, find_tags
@@ -20,6 +25,9 @@ log = logging.getLogger(__name__)
 
 MESSAGE_LIMIT = 2000
 MAX_THREAD_NAME = 100
+CARD_TEXT_LIMIT = 4000  # all the text in one card message, added up
+GALLERY_LIMIT = 10
+NO_ICONS = Icons(Path())  # strips :mm_name: when no icons are available, e.g. in thread titles
 
 
 @dataclass
@@ -53,7 +61,9 @@ class _Answers(dict[str, str]):
         return ""
 
 
-def render(submission: Submission, *, number: int, author_mention: str) -> tuple[str, list[str]]:
+def render(
+    submission: Submission, *, number: int, author_mention: str, icons: Icons = NO_ICONS
+) -> tuple[str, list[str]]:
     """Build the post title and its body, split into messages that fit Discord's length limit.
 
     The body is a small summary line, one heading per answered section, and a credit footer.
@@ -64,12 +74,11 @@ def render(submission: Submission, *, number: int, author_mention: str) -> tuple
     title = render_title(template.title_format, answers)
 
     rendered = [(section, block) for section in template.sections if (block := _render_section(section, answers))]
-    blocks = [_header_line(template, answers)]
+    blocks = [_header_line(template, answers, icons)]
     blocks += [block for section, block in rendered if not section.after_credit]
-    blocks.append(f"-# {template.credit} {author_mention} · {template.id_prefix}-{number:04d}")
-    # Sections marked after_credit (like a link) sit at the very end, right above any images.
-    blocks += [block for section, block in rendered if section.after_credit]
-    return title, split_message(blocks)
+    blocks += [block for section, block in rendered if section.after_credit]  # e.g. a link, near the bottom
+    blocks.append(_credit(template, author_mention, number))  # lowest priority, so always last
+    return title, split_message([icons.apply(block) for block in blocks])
 
 
 TITLE_SEPARATOR = " · "
@@ -79,14 +88,25 @@ def render_title(title_format: str, answers: dict[str, str]) -> str:
     """Fill in the title. Pieces separated by " · " are dropped when all their answers were skipped."""
     pieces = title_format.split(TITLE_SEPARATOR)
     kept = [p for p in pieces if not (keys := PLACEHOLDER.findall(p)) or any(answers[k] for k in keys)]
-    return TITLE_SEPARATOR.join(p.format_map(answers) for p in kept)[:MAX_THREAD_NAME]
+    title = TITLE_SEPARATOR.join(p.format_map(answers) for p in kept)
+    return NO_ICONS.apply(title)[:MAX_THREAD_NAME]  # thread names can't show custom icons
 
 
-def _header_line(template: Template, answers: dict[str, str]) -> str:
-    """For example: -# 💡 Feature request · Trading · Website"""
-    emoji = template.tag_emojis.get(template.type_tag, "")
-    parts = [f"{emoji} {template.name}".strip(), *(answers[key] for key in template.header if answers[key])]
+def _form_icon(template: Template, icons: Icons) -> str:
+    """The form's own icon if it's uploaded, otherwise the emoji on its tag."""
+    return (icons.text(template.icon) if template.icon else "") or template.tag_emojis.get(template.type_tag, "")
+
+
+def _header_line(template: Template, answers: dict[str, str], icons: Icons, *, plain: bool = False) -> str:
+    """For example: -# 💡 Feature request · Trading · Website. Cards already show the icon, so plain leaves it off."""
+    name = template.name if plain else f"{_form_icon(template, icons)} {template.name}".strip()
+    parts = [name, *(answers[key] for key in template.header if answers[key])]
     return "-# " + " · ".join(parts)
+
+
+def _credit(template: Template, author_mention: str, number: int) -> str:
+    """The small footer, e.g. -# Posted by @someone · PC-0001"""
+    return f"-# {template.credit} {author_mention} · {template.id_prefix}-{number:04d}"
 
 
 def _render_section(section: Section, answers: dict[str, str]) -> str | None:
@@ -95,6 +115,11 @@ def _render_section(section: Section, answers: dict[str, str]) -> str | None:
     for line in section.body.split("\n"):
         keys = PLACEHOLDER.findall(line)
         if keys and not any(answers[key] for key in keys):
+            continue
+        if line.startswith(">") and keys:
+            # A quoted answer that runs over several lines stays inside the quote.
+            filled = line.format_map(answers)
+            lines += ["> " + part if not part.startswith(">") else part for part in filled.split("\n")]
             continue
         lines.append(line.format_map(answers))
     body = "\n".join(lines).strip()
@@ -128,6 +153,83 @@ def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT) -> list[str]:
     return messages
 
 
+def render_card(
+    submission: Submission,
+    *,
+    number: int,
+    author_mention: str,
+    icons: Icons = NO_ICONS,
+    files: list[discord.File] | None = None,
+) -> ui.LayoutView | None:
+    """Build a card post: a colored box with a title, one block per section, dividers, pictures and a link button.
+
+    Returns None if the answers are too long for one card, so the caller can post plain text instead.
+    """
+    template = submission.template
+    answers = submission.answers()
+    title = (template.card_title or template.title_format).format_map(answers).strip()
+    thumbnail = icons.url(template.icon) if template.thumbnail else None
+    icon = "" if thumbnail else _form_icon(template, icons)  # with a thumbnail, the icon sits there instead
+
+    heading = icons.apply(f"## {icon} {title}").replace("##  ", "## ")
+    texts: list[str] = [heading + "\n" + _header_line(template, answers, icons, plain=True)]
+    banner_name = template.banner_filename if template.banner_on_posts else None
+    banner = next((f for f in files or [] if banner_name and f.filename == banner_name), None)
+    children: list[ui.Item] = [ui.MediaGallery(discord.MediaGalleryItem(banner))] if banner else []
+    top = ui.TextDisplay(texts[0])
+    children.append(ui.Section(top, accessory=ui.Thumbnail(thumbnail)) if thumbnail else top)
+    first_section = len(children)
+    for section in template.sections:
+        if section.after_credit or (block := _render_section(section, answers)) is None:
+            continue
+        if section.divider or len(children) == first_section:
+            children.append(ui.Separator())
+        texts.append(icons.apply(block))
+        children.append(ui.TextDisplay(texts[-1]))
+
+    uploads = [f for f in files or [] if f is not banner]
+    images = [f for f in uploads if _is_image(f.filename)]
+    others = [f for f in uploads if not _is_image(f.filename)]
+    if images:
+        children.append(ui.Separator())
+        children += [ui.MediaGallery(*(discord.MediaGalleryItem(f) for f in chunk)) for chunk in _chunks(images)]
+    children += [ui.File(f) for f in others]
+
+    for section in template.sections:
+        if section.after_credit and (block := _render_section(section, answers)) is not None:
+            texts.append(icons.apply(block))
+            children.append(ui.TextDisplay(texts[-1]))
+    link = _link_button(template, answers)
+    if link is not None:
+        children.append(ui.ActionRow(link))
+    texts.append(_credit(template, author_mention, number))  # lowest priority, so always last
+    children.append(ui.TextDisplay(texts[-1]))
+
+    if sum(len(t) for t in texts) > CARD_TEXT_LIMIT:
+        return None
+    view = ui.LayoutView(timeout=None)
+    view.add_item(ui.Container(*children, accent_colour=template.color))
+    return view
+
+
+def _link_button(template: Template, answers: dict[str, str]) -> ui.Button | None:
+    if template.link_button is None:
+        return None
+    url = answers[template.link_button.key].strip()
+    if not re.fullmatch(r"https?://\S+", url) or len(url) > 512:
+        return None  # not a usable link, so leave the button off rather than fail the post
+    return ui.Button(label=template.link_button.label, url=url, style=discord.ButtonStyle.link)
+
+
+def _is_image(filename: str) -> bool:
+    return filename.lower().rsplit(".", 1)[-1] in {"png", "jpg", "jpeg", "gif", "webp"}
+
+
+def _chunks(files: list[discord.File]) -> Iterator[list[discord.File]]:
+    for start in range(0, len(files), GALLERY_LIMIT):
+        yield files[start : start + GALLERY_LIMIT]
+
+
 def webhook_username(display_name: str) -> str:
     """Discord rejects webhook names that contain 'discord' or 'clyde'."""
     cleaned = re.sub(r"(?i)discord|clyde", "", display_name).strip()
@@ -140,19 +242,24 @@ async def publish(forums: ForumsContext, submission: Submission) -> discord.Thre
     forum = await _fetch_forum(author.guild, submission.binding.channel_id)
 
     files = await _download(submission.attachments)
+    if template.is_card and template.banner_on_posts:
+        config = getattr(forums.bot, "config", None)
+        banner = banner_file(getattr(config, "banners_dir", None), template)
+        files = [banner, *files] if banner else files
     number = await forums.storage.next_post_number(forum.id, template.id)
+    icons: Icons = getattr(forums.bot, "icons", NO_ICONS)
     tags = find_tags(forum, submission.tag_names())[: MAX_POST_TAGS - 1]  # leave room for the status tag
 
     thread: discord.Thread | None = None
     if submission.binding.webhook_url:
         try:
-            thread = await _post_as_author(forums, submission, files, tags, number)
+            thread = await _post_as_author(forums, submission, files, tags, number, icons)
         except discord.HTTPException:
             log.exception("Webhook post failed, posting as the bot instead")
             for file in files:
                 file.reset()
     if thread is None:
-        thread = await _post_as_bot(forum, submission, files, tags, number)
+        thread = await _post_as_bot(forum, submission, files, tags, number, icons)
 
     status_tag = find_tag(forum, template.initial_status)
     if status_tag is not None:
@@ -184,13 +291,27 @@ async def _post_as_author(
     files: list[discord.File],
     tags: list[discord.ForumTag],
     number: int,
+    icons: Icons,
 ) -> discord.Thread:
     """Post through the forum's webhook, showing the member's name and avatar."""
     author = submission.author
-    title, messages = render(submission, number=number, author_mention=author.mention)
+    title, messages = render(submission, number=number, author_mention=author.mention, icons=icons)
     webhook = discord.Webhook.from_url(submission.binding.webhook_url or "", client=forums.bot)
     identity = {"username": webhook_username(author.display_name), "avatar_url": author.display_avatar.url}
     mentions = _mention_only(author)
+
+    card = _card(submission, number, author, icons, files)
+    if card is not None:
+        sent = await webhook.send(
+            view=card,
+            files=files,
+            thread_name=title,
+            applied_tags=tags,
+            allowed_mentions=mentions,
+            wait=True,
+            **identity,
+        )
+        return await fetch_thread(author.guild, sent.id)
 
     first = await webhook.send(
         messages[0],
@@ -219,11 +340,19 @@ async def _post_as_bot(
     files: list[discord.File],
     tags: list[discord.ForumTag],
     number: int,
+    icons: Icons,
 ) -> discord.Thread:
     """Fallback when the webhook is missing or fails: the bot posts and credits the member."""
     author = submission.author
-    title, messages = render(submission, number=number, author_mention=author.mention)
+    title, messages = render(submission, number=number, author_mention=author.mention, icons=icons)
     mentions = _mention_only(author)
+
+    card = _card(submission, number, author, icons, files)
+    if card is not None:
+        created = await forum.create_thread(
+            name=title, view=card, files=files, applied_tags=tags, allowed_mentions=mentions
+        )
+        return created.thread
 
     created = await forum.create_thread(
         name=title,
@@ -237,6 +366,29 @@ async def _post_as_bot(
     return created.thread
 
 
+def banner_file(banners_dir: Path | None, template: Template) -> discord.File | None:
+    """The form's banner image, ready to attach. None if the form has none or the file is missing."""
+    if not template.banner or banners_dir is None or template.banner_filename is None:
+        return None
+    path = banners_dir / f"{template.banner}.png"
+    if not path.is_file():
+        log.warning("Banner %s not found for %s", path.name, template.id)
+        return None
+    return discord.File(path, filename=template.banner_filename)
+
+
+def _card(
+    submission: Submission, number: int, author: discord.Member, icons: Icons, files: list[discord.File]
+) -> ui.LayoutView | None:
+    """The card version of the post, or None for text-style forms (or answers too long for a card)."""
+    if not submission.template.is_card:
+        return None
+    card = render_card(submission, number=number, author_mention=author.mention, icons=icons, files=files)
+    if card is None:
+        log.warning("Answers too long for a card; posting %s as text", submission.template.id)
+    return card
+
+
 def _mention_only(member: discord.Member) -> discord.AllowedMentions:
     """Mentioning the author adds them to the post so they're notified of replies."""
     return discord.AllowedMentions(everyone=False, roles=False, users=[member])
@@ -244,9 +396,12 @@ def _mention_only(member: discord.Member) -> discord.AllowedMentions:
 
 async def _download(attachments: dict[str, list[discord.Attachment]]) -> list[discord.File]:
     files: list[discord.File] = []
-    for attachment in (a for group in attachments.values() for a in group):
+    for index, attachment in enumerate(a for group in attachments.values() for a in group):
         try:
-            files.append(await attachment.to_file())
+            file = await attachment.to_file()
+            # Cards point at files by name, so names must be unique and safe in a link.
+            file.filename = f"{index + 1}-" + re.sub(r"[^\w.-]", "_", file.filename)
+            files.append(file)
         except discord.HTTPException:
             log.warning("Could not download attachment %s", attachment.filename)
     return files

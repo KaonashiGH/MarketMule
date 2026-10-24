@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import discord
 from discord import app_commands, ui
@@ -37,6 +37,7 @@ GUIDE_BUTTON_PREFIX = "marketmule:forums:guide:"
 FORM_TIMEOUT = 15 * 60
 NO_MENTIONS = discord.AllowedMentions.none()
 MEDALS = ("🥇", "🥈", "🥉")
+MEDAL_ICONS = ("mm_first", "mm_second", "mm_third")  # used instead once icons are uploaded
 
 # The " · ⭐ 31.5/40" added to the end of a post's top line.
 SCORE_SUFFIX = re.compile(r" · \S+ [\d.]+/\d+$")
@@ -405,21 +406,68 @@ async def refresh_scores(
         starter = thread.starter_message or await thread.fetch_message(thread.id)
     except discord.HTTPException:
         return
-    top_line, _, rest = starter.content.partition("\n")
-    if not top_line.startswith("-# "):
-        return
-    new_top = with_score(top_line, rating, summary)
-    if new_top == top_line:
-        return
-    content = f"{new_top}\n{rest}" if rest else new_top
+    if starter.content:
+        top_line, _, rest = starter.content.partition("\n")
+        if not top_line.startswith("-# "):
+            return
+        new_top = with_score(top_line, rating, summary)
+        if new_top == top_line:
+            return
+        changes: dict[str, Any] = {"content": f"{new_top}\n{rest}" if rest else new_top}
+    else:
+        card = card_with_score(starter, rating, summary)  # card posts keep the score in the card's small line
+        if card is None:
+            return
+        changes = {"view": card}
     try:
         if starter.webhook_id and binding and binding.webhook_url:
             webhook = discord.Webhook.from_url(binding.webhook_url, client=forums.bot)
-            await webhook.edit_message(starter.id, content=content, thread=thread, allowed_mentions=NO_MENTIONS)
+            await webhook.edit_message(starter.id, thread=thread, allowed_mentions=NO_MENTIONS, **changes)
         elif forums.bot.user and starter.author.id == forums.bot.user.id:
-            await starter.edit(content=content, allowed_mentions=NO_MENTIONS)
+            await starter.edit(allowed_mentions=NO_MENTIONS, **changes)
     except discord.HTTPException:
         log.warning("Could not update the score in %s", thread.name)
+
+
+def card_with_score(starter: discord.Message, rating: Rating, summary: RatingSummary) -> ui.LayoutView | None:
+    """Rebuild a card post with the average added to its small line. None if nothing changes."""
+    view = ui.LayoutView.from_message(starter, timeout=None)
+    if not isinstance(view, ui.LayoutView) or not add_score_to_card(view, rating, summary):
+        return None
+    _keep_attachments(view, starter)
+    return view
+
+
+def add_score_to_card(view: ui.LayoutView, rating: Rating, summary: RatingSummary) -> bool:
+    """Update the score at the end of the card's small line. False if there was nothing to change."""
+    first = next((item for item in view.walk_children() if isinstance(item, ui.TextDisplay)), None)
+    if first is None:
+        return False
+    lines = first.content.split("\n")
+    index = next((i for i, line in enumerate(lines) if line.startswith("-# ")), None)
+    if index is None:
+        return False
+    updated = with_score(lines[index], rating, summary)
+    if updated == lines[index]:
+        return False
+    lines[index] = updated
+    first.content = "\n".join(lines)
+    return True
+
+
+def _keep_attachments(view: ui.LayoutView, starter: discord.Message) -> None:
+    """Point pictures back at the post's own files. Their copied links expire, so they'd break later."""
+    by_path = {attachment.url.split("?")[0]: attachment.filename for attachment in starter.attachments}
+    for item in view.walk_children():
+        media_items = item.items if isinstance(item, ui.MediaGallery) else []
+        for media in media_items:
+            name = by_path.get(media.media.url.split("?")[0])
+            if name:
+                media.media = f"attachment://{name}"
+        if isinstance(item, ui.File):
+            name = by_path.get(item.media.url.split("?")[0])
+            if name:
+                item.media = f"attachment://{name}"
 
 
 async def offer_rating(forums: ForumsContext, template: Template, thread: discord.Thread) -> None:
@@ -454,9 +502,13 @@ class Leaderboard(commands.Cog):
             )
             return
 
+        icons = getattr(self.forums.bot, "icons", None)
         lines = []
         for place, post in enumerate(ranked, start=1):
-            badge = MEDALS[place - 1] if place <= len(MEDALS) else f"**{place}.**"
+            if place <= len(MEDALS):
+                badge = (icons.text(MEDAL_ICONS[place - 1]) if icons else "") or MEDALS[place - 1]
+            else:
+                badge = f"**{place}.**"
             plural = "rating" if post.count == 1 else "ratings"
             lines.append(
                 f"{badge} <#{post.thread_id}>\n"

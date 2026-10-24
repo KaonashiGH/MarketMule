@@ -52,9 +52,14 @@
   ],
 
   "header": ["area", "platform", "category"],
+  "style": "card",
+  "thumbnail": true,
+  "banner": "feature",
+  "icon": "mm_feature",
+  "card_title": "{summary}",
   "sections": [
-    {"heading": "Description", "body": "{description}"},
-    {"heading": "Why it's needed", "body": "{why}"}
+    {"heading": "Description", "body": "> {description}"},
+    {"heading": "Why it's needed", "body": "> {why}"}
   ],
   "credit": "Suggested by",
 

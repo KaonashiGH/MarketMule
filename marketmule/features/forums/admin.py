@@ -17,7 +17,7 @@ from discord.ext import commands
 from marketmule.core.staff import get_staff_role
 
 from .forms import FormPanel, panel_thread_name
-from .posting import fetch_thread
+from .posting import banner_file, fetch_thread
 from .storage import Binding
 from .tags import AUDIT_REASON, TagLimitError, find_tag, sync_forum_tags
 from .templates import Template
@@ -265,10 +265,10 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
         self, forum: discord.ForumChannel, previous: Binding | None, forms: list[Template]
     ) -> discord.Thread:
         """Post a fresh pinned Start here post for these forms and delete the old one."""
-        panel = await self._post_panel(forum, forms)
-        if previous and previous.panel_thread_id and previous.panel_thread_id != panel.id:
+        # Delete the old one first: a forum can only have one pinned post.
+        if previous and previous.panel_thread_id:
             await self._delete_thread(forum.guild, previous.panel_thread_id)
-        return panel
+        return await self._post_panel(forum, forms)
 
     async def _post_panel(self, forum: discord.ForumChannel, forms: list[Template]) -> discord.Thread:
         """Create the locked, pinned post that holds each form's Start button."""
@@ -276,11 +276,17 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
         if forum.flags.require_tag:
             type_tag = find_tag(forum, forms[0].type_tag)
             tags = [type_tag] if type_tag else []
+        config = getattr(self.forums.bot, "config", None)
+        banners = [f for t in forms if (f := banner_file(getattr(config, "banners_dir", None), t))]
         created = await forum.create_thread(
             name=panel_thread_name(forms),
-            view=FormPanel(self.forums, forms),
+            view=FormPanel(self.forums, forms, banners={f.filename for f in banners}),
+            files=banners,
             applied_tags=tags,
         )
+        for thread in forum.threads:  # unpin anything else, e.g. a post pinned by hand
+            if thread.flags.pinned and thread.id != created.thread.id:
+                await thread.edit(pinned=False)
         return await created.thread.edit(pinned=True, locked=True)
 
     @staticmethod

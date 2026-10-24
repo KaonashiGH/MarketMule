@@ -11,7 +11,7 @@ from discord import ui
 
 from marketmule.core.views import FixAnswersView, blocked_words_message
 
-from .posting import Submission, publish
+from .posting import NO_ICONS, Submission, publish
 from .ratings import offer_rating
 from .status import offer_author_close
 from .templates import Field, Template
@@ -56,17 +56,23 @@ class FormPanel(ui.LayoutView):
     posts keep working after a restart.
     """
 
-    def __init__(self, forums: ForumsContext, templates: Sequence[Template]) -> None:
+    def __init__(self, forums: ForumsContext, templates: Sequence[Template], banners: Collection[str] = ()) -> None:
+        """banners: the banner files attached to the post, e.g. {"banner-price_check.png"}."""
         super().__init__(timeout=None)
         self.forums = forums
 
+        icons = getattr(forums.bot, "icons", None) if forums is not None else None
         card = ui.Container(accent_color=templates[0].color if templates else None)
         for index, template in enumerate(templates):
             if index:
                 card.add_item(ui.Separator(spacing=discord.SeparatorSpacing.large))
-            card.add_item(ui.TextDisplay(f"## {template.panel.title}\n{template.panel.text}"))
+            if template.banner_filename in banners:
+                card.add_item(ui.MediaGallery(discord.MediaGalleryItem(f"attachment://{template.banner_filename}")))
+            text = f"## {template.panel.title}\n{template.panel.text}"
+            card.add_item(ui.TextDisplay(icons.apply(text) if icons else NO_ICONS.apply(text)))
             button: ui.Button = ui.Button(
                 label=template.panel.button_label,
+                emoji=icons.emoji(template.icon) if icons else None,
                 style=BUTTON_STYLES.get(template.panel.button_style, discord.ButtonStyle.primary),
                 custom_id=START_BUTTON_PREFIX + template.id,
             )

@@ -8,7 +8,7 @@
   "panel": {
     "thread_name": "Start here: Price Checks",
     "title": "How to make a Price Check",
-    "text": "Not sure what your item is worth? Click **Get a Price Check** below.\n\n🔍 **Search this forum first.** If your item is already here, vote on it with 💸 instead of posting a new one.\n\nThe form has two short steps:\n**1. Your Price Check:** a title and your item's details\n**2. Details:** why you need help, plus required pictures\n\nYour post is titled `[Price Check] - Title`, tagged, and posted here for the team to review. Other users can vote with 💸 or ❌.",
+    "text": "Not sure what your item is worth? Click **Get a Price Check** below.\n\n🔍 **Search this forum first.** If your item is already here, vote on it with 💸 instead of posting a new one.\n\nThe form has two short steps:\n**1. Your Price Check:** a title and your item's details\n**2. Details:** why you need help, plus required pictures\n\nYour post is titled with your item's name, wear and pattern, tagged, and posted here for the team to review. Other users can vote with 💸 or ❌.",
     "button_label": "Get a Price Check",
     "button_style": "primary"
   },
@@ -18,9 +18,9 @@
       "name": "Your Item",
       "title": "Price Check (1/2): Your item",
       "fields": [
-        {"key": "title", "label": "Title", "max_length": 80,
-         "description": "Mention a few details about your item, like the name, type, and condition.",
-         "placeholder": "[mention some details about the item]"},
+        {"key": "title", "label": "What's your question?", "max_length": 80,
+         "description": "Keep it short. This is the headline of your post.",
+         "placeholder": "[e.g., Is this a Tier 2 blue gem?]"},
         {"key": "item", "label": "Provide the item name", "max_length": 100,
          "placeholder": "[e.g., AK-47 | Case Hardened]"},
         {"key": "wear", "label": "Provide the exact wear (Float)", "max_length": 50,
@@ -35,12 +35,12 @@
       "name": "Price Check Continued",
       "title": "Price Check (2/2): Details",
       "fields": [
-        {"key": "features", "type": "select", "tag": true, "label": "Item Features", "max_length": 50,
+        {"key": "features", "type": "select", "tag": true, "label": "Item Features", "required": false,
         "max" : 3, "placeholder": "Pick 3 features that apply to your item",
-        "options": ["Case Hardened", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
+        "options": ["Case Hardended", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
         {"key": "hold", "label": "Provide hold information", "max_length": 50,
          "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
-        {"key": "question", "label": "Detail your specific question or concern", "style": "paragraph",
+        {"key": "question", "label": "Any extra details? (optional)", "style": "paragraph",
          "max_length": 1000, "required": false,
          "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
         {"key": "link", "label": "CSFloat link to the item (optional)", "max_length": 300, "required": false,
@@ -52,13 +52,20 @@
   ],
 
 
+  "style": "card",
+  "thumbnail": true,
+  "banner": "pricecheck",
+  "icon": "mm_pricecheck",
+  "card_title": "{title}",
   "header": ["hold"],
   "sections": [
-    {"heading": "Item", "body": "**Name:** {item}\n**Wear:** {wear}\n**Pattern:** {pattern}"},
-    {"heading": "Stickers", "body": "{stickers}"},
-    {"heading": "Question", "body": "{question}"},
-    {"heading": "", "body": "🔗 {link}", "after_credit": true}
+    {"heading": "Item", "body": "> {item}"},
+    {"heading": "Wear", "body": "> {wear}"},
+    {"heading": "Pattern", "body": "> {pattern}"},
+    {"heading": ":mm_stickers: Stickers", "body": "> {stickers}", "divider": true},
+    {"heading": "Question for the community", "body": "> {question}"}
   ],
+  "link_button": {"key": "link", "label": "View on CSFloat"},
   "credit": "Posted by",
 
   "statuses": ["Needs pricing", "Priced", "Closed"],

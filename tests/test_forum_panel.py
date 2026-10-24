@@ -1,6 +1,7 @@
 import asyncio
 from typing import Any, cast
 
+import pytest
 from discord import ui
 
 from marketmule.core.config import PROJECT_ROOT
@@ -22,6 +23,12 @@ def items_of(panel: FormPanel, kind: type) -> list:
     return [item for item in panel.walk_children() if isinstance(item, kind)]
 
 
+needs_loadout_and_tradeup = pytest.mark.skipif(
+    not {"loadout", "tradeup"} <= set(TEMPLATES), reason="loadout or tradeup is drafted (.draft)"
+)
+
+
+@needs_loadout_and_tradeup
 def test_two_forms_share_one_card_with_a_divider() -> None:
     panel = build("loadout", "tradeup")
 
@@ -42,6 +49,7 @@ def test_panel_survives_restarts() -> None:
     assert build(*TEMPLATES).is_persistent()
 
 
+@needs_loadout_and_tradeup
 def test_thread_names() -> None:
     assert panel_thread_name([TEMPLATES["bug_report"]]) == "Start here: Report a bug"
     assert panel_thread_name([TEMPLATES["loadout"], TEMPLATES["tradeup"]]) == "Start here: Loadout & Trade-up"
@@ -65,3 +73,16 @@ def test_forms_without_close_button_get_none() -> None:
         return AuthorCloseView(cast(Any, None), TEMPLATES["bug_report"])
 
     assert items_of(asyncio.run(make()), ui.Button) == []
+
+
+def test_banner_sits_above_its_form_when_attached() -> None:
+    async def make() -> tuple[FormPanel, FormPanel]:
+        forms = [TEMPLATES["price_check"]]
+        return FormPanel(cast(Any, None), forms, banners={"banner-price_check.png"}), FormPanel(cast(Any, None), forms)
+
+    with_banner, without = asyncio.run(make())
+    (card,) = with_banner.children
+    first = card.children[0]
+    assert isinstance(first, ui.MediaGallery)
+    assert first.items[0].media.url == "attachment://banner-price_check.png"
+    assert not items_of(without, ui.MediaGallery)  # no file attached, so no broken image

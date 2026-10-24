@@ -1,10 +1,18 @@
+import asyncio
+from dataclasses import replace
+from pathlib import Path
 from typing import Any, cast
 
+from discord import ui
+
 from marketmule.core.config import PROJECT_ROOT
+from marketmule.core.icons import Icons
 from marketmule.features.forums.posting import (
+    NO_ICONS,
     Submission,
     _Answers,
     render,
+    render_card,
     render_title,
     split_message,
     webhook_username,
@@ -60,10 +68,10 @@ def test_feature_request_reads_like_a_post() -> None:
     title, body = body_of(submission)
 
     assert title == "[Trading] - Bulk accept trades"
-    assert body == (
+    assert body == (  # the plain-text version, used when answers are too long for a card
         "-# 💡 Feature request · Trading · Website\n\n"
-        "### Description\nAdd a button to accept all pending trades.\n\n"
-        "### Why it's needed\nAccepting 20 trades one by one takes forever.\n\n"
+        "### Description\n> Add a button to accept all pending trades.\n\n"
+        "### Why it's needed\n> Accepting 20 trades one by one takes forever.\n\n"
         "-# Suggested by @someone · IDEA-0007"
     )
 
@@ -102,22 +110,89 @@ def test_section_disappears_when_all_its_questions_are_skipped() -> None:
     assert "### Account & trade" not in body
 
 
-def test_price_check_spreads_details_over_lines() -> None:
-    submission = make_submission(
-        "price_check",
-        {},
+class FakeEmoji:
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.url = f"https://cdn.example/{name}.png"
+
+    def __str__(self) -> str:
+        return f"<:{self.name}:1>"
+
+
+def icons_with(*names: str) -> Icons:
+    icons = Icons(Path())
+    icons.set(cast(Any, [FakeEmoji(n) for n in names]))
+    return icons
+
+
+def price_check(**changes: str) -> Submission:
+    answers = dict(
         title="Tier 2 Blue Gem AK",
         item="AK-47 | Case Hardened",
         wear="Field-Tested 0.23456",
         pattern="",
+        stickers="",
+        question="Is this tier 2?\nHow much over market?",
         link="https://csfloat.com/item/123",
         hold="Tradable now",
     )
-    _, body = body_of(submission, number=1)  # the title differs between the standard and detailed forms
-    assert body.startswith("-# 💰 Price Check · Tradable now\n\n### Item\n**Name:** AK-47 | Case Hardened\n")
-    assert body.endswith("Posted by @someone · PC-0001\n\n🔗 https://csfloat.com/item/123")  # link last, above photos
-    assert "Pattern" not in body  # skipped
-    assert "### Stickers" not in body and "### Question" not in body
+    answers.update(changes)
+    return make_submission("price_check", {}, **answers)
+
+
+def card_texts(submission: Submission, icons: Icons = NO_ICONS) -> tuple[list[str], list[Any]]:
+    async def build() -> Any:
+        return render_card(submission, number=1, author_mention="@someone", icons=icons)
+
+    view = asyncio.run(build())
+    assert view is not None
+    (container,) = view.children
+    texts = [c.content for c in container.walk_children() if isinstance(c, ui.TextDisplay)]
+    return texts, list(container.children)
+
+
+def test_price_check_card_uses_headers_and_quotes() -> None:
+    texts, children = card_texts(price_check())
+    assert texts[0] == "## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now"
+    assert "### Item\n> AK-47 | Case Hardened" in texts
+    # Every line of a long answer stays quoted.
+    assert "### Question for the community\n> Is this tier 2?\n> How much over market?" in texts
+    assert not any("Pattern" in t or "Stickers" in t for t in texts)  # skipped questions disappear
+    assert texts[-1] == "-# Posted by @someone · PC-0001"
+    assert isinstance(children[-2], ui.ActionRow)  # the link button sits above the small credit line
+    (row,) = [c for c in children if isinstance(c, ui.ActionRow)]
+    (button,) = row.children
+    assert button.url == "https://csfloat.com/item/123" and button.label == "View on CSFloat"
+
+
+def test_card_link_button_only_for_real_links() -> None:
+    _, children = card_texts(price_check(link="not a link"))
+    assert not any(isinstance(c, ui.ActionRow) for c in children)
+
+
+def test_card_uses_uploaded_icons() -> None:
+    submission = price_check(stickers="4x Kato")
+    submission.template = replace(submission.template, thumbnail=False)  # icon goes in the title instead
+    texts, _ = card_texts(submission, icons_with("mm_pricecheck", "mm_stickers"))
+    assert texts[0].startswith("## <:mm_pricecheck:1> Tier 2 Blue Gem AK")
+    assert "### <:mm_stickers:1> Stickers\n> 4x Kato" in texts
+
+
+def test_card_too_long_falls_back_to_text() -> None:
+    async def build() -> Any:
+        long = "x" * 900
+        submission = price_check(question=long, item=long, wear=long, pattern=long, stickers=long, title=long)
+        return render_card(submission, number=1, author_mention="@someone")
+
+    assert asyncio.run(build()) is None
+
+
+def test_missing_icons_leave_no_gap() -> None:
+    icons = icons_with("mm_rate")
+    assert icons.apply("## :mm_pricecheck: Price check") == "## Price check"
+    assert icons.apply(":mm_rate: Rate it") == "<:mm_rate:1> Rate it"
+    assert icons.emoji("mm_bump", "🔼") == "🔼"
+    assert render_title("[PC] :mm_pricecheck: {item}", _Answers(item="AK")) == "[PC] AK"  # thread names: plain text
 
 
 def test_title_drops_skipped_pieces() -> None:
@@ -130,3 +205,33 @@ def test_title_drops_skipped_pieces() -> None:
 
 def test_title_is_cut_to_discord_limit() -> None:
     assert len(render_title("{name}", _Answers(name="x" * 300))) == 100
+
+
+def test_thumbnail_shows_the_form_icon_in_the_corner() -> None:
+    submission = price_check()
+    submission.template = replace(submission.template, thumbnail=True)
+    texts, children = card_texts(submission, icons_with("mm_pricecheck"))
+    section = children[0]
+    assert isinstance(section, ui.Section)
+    assert section.accessory.media.url == "https://cdn.example/mm_pricecheck.png"
+    assert texts[0].startswith("## Tier 2 Blue Gem AK")  # the icon moved to the corner, not repeated
+
+
+def test_banner_on_posts_sits_above_everything() -> None:
+    import io
+
+    import discord
+
+    submission = price_check()
+    submission.template = replace(submission.template, banner="pricecheck", banner_on_posts=True)
+
+    async def build() -> Any:
+        banner = discord.File(io.BytesIO(b"x"), filename="banner-price_check.png")
+        shot = discord.File(io.BytesIO(b"x"), filename="1-shot.png")
+        return render_card(submission, number=1, author_mention="@someone", files=[banner, shot])
+
+    (container,) = asyncio.run(build()).children
+    galleries = [c for c in container.children if isinstance(c, ui.MediaGallery)]
+    assert container.children[0] is galleries[0]
+    assert [i.media.url for i in galleries[0].items] == ["attachment://banner-price_check.png"]
+    assert [i.media.url for i in galleries[1].items] == ["attachment://1-shot.png"]  # banner isn't in the gallery
