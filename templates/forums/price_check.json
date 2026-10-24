@@ -52,7 +52,7 @@
   ],
 
 
-  "style": "card",
+  "style": "text",
   "thumbnail": false,
   "banner": "pricecheck",
   "icon": "mm_pricecheck",
