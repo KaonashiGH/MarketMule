@@ -11,6 +11,7 @@ from marketmule.features.forums.posting import (
     NO_ICONS,
     Submission,
     _Answers,
+    link_view,
     render,
     render_card,
     render_title,
@@ -243,4 +244,10 @@ def test_price_check_as_text_keeps_headline_and_link() -> None:
     _, body = body_of(submission, number=8)
     assert body.startswith("## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now\n### Item\n> AK-47")
     assert "\n\n" not in body  # no blank lines: headings already add their own space
-    assert body.endswith("🔗 [View on CSFloat](<https://csfloat.com/item/123>)\n-# Posted by @someone · PC-0008")
+    assert body.endswith("> How much over market?\n-# Posted by @someone · PC-0008")
+
+    async def button() -> Any:
+        return link_view(submission)
+
+    (link,) = asyncio.run(button()).children  # a real button under the post, the same as on a card
+    assert link.label == "View on CSFloat" and link.url == "https://csfloat.com/item/123"

@@ -83,9 +83,6 @@ def render(
         blocks = [_header_line(template, answers, icons)]
     blocks += [block for section, block in rendered if not section.after_credit]
     blocks += [block for section, block in rendered if section.after_credit]  # e.g. a link, near the bottom
-    link = _link_button(template, answers)
-    if link is not None:
-        blocks.append(f"🔗 [{link.label}](<{link.url}>)")  # the text version of the card's link button
     blocks.append(_credit(template, author_mention, number))  # lowest priority, so always last
     # One line apart: Discord already adds space above each ### heading, so a blank line would double it.
     return title, split_message([icons.apply(block) for block in blocks], separator="\n")
@@ -323,22 +320,26 @@ async def _post_as_author(
         )
         return await fetch_thread(author.guild, sent.id)
 
+    button = link_view(submission)  # e.g. View on CSFloat, under the last message like on a card
+    last = len(messages) - 1
     first = await webhook.send(
         messages[0],
-        files=files if len(messages) == 1 else [],
+        files=files if last == 0 else [],
         thread_name=title,
         applied_tags=tags,
         allowed_mentions=mentions,
         wait=True,
+        **({"view": button} if button and last == 0 else {}),
         **identity,
     )
     # A forum post's starter message has the same ID as the post itself.
     for index, content in enumerate(messages[1:], start=1):
         await webhook.send(
             content,
-            files=files if index == len(messages) - 1 else [],
+            files=files if index == last else [],
             thread=discord.Object(first.id),
             allowed_mentions=mentions,
+            **({"view": button} if button and index == last else {}),
             **identity,
         )
     return await fetch_thread(author.guild, first.id)
@@ -364,15 +365,23 @@ async def _post_as_bot(
         )
         return created.thread
 
+    button = link_view(submission)
+    last = len(messages) - 1
     created = await forum.create_thread(
         name=title,
         content=messages[0],
-        files=files if len(messages) == 1 else [],
+        files=files if last == 0 else [],
         applied_tags=tags,
         allowed_mentions=mentions,
+        **({"view": button} if button and last == 0 else {}),
     )
     for index, content in enumerate(messages[1:], start=1):
-        await created.thread.send(content, files=files if index == len(messages) - 1 else [], allowed_mentions=mentions)
+        await created.thread.send(
+            content,
+            files=files if index == last else [],
+            allowed_mentions=mentions,
+            **({"view": button} if button and index == last else {}),
+        )
     return created.thread
 
 
@@ -385,6 +394,16 @@ def banner_file(banners_dir: Path | None, template: Template) -> discord.File | 
         log.warning("Banner %s not found for %s", path.name, template.id)
         return None
     return discord.File(path, filename=template.banner_filename)
+
+
+def link_view(submission: Submission) -> ui.View | None:
+    """Text posts: the same link button a card has (e.g. View on CSFloat), as a normal button row."""
+    button = _link_button(submission.template, submission.answers())
+    if button is None:
+        return None
+    view = ui.View(timeout=None)
+    view.add_item(button)
+    return view
 
 
 def _card(
