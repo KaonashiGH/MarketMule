@@ -69,9 +69,9 @@ def test_feature_request_reads_like_a_post() -> None:
 
     assert title == "[Trading] - Bulk accept trades"
     assert body == (  # the plain-text version, used when answers are too long for a card
-        "-# 💡 Feature request · Trading · Website\n\n"
-        "### Description\n> Add a button to accept all pending trades.\n\n"
-        "### Why it's needed\n> Accepting 20 trades one by one takes forever.\n\n"
+        "## 💡 Bulk accept trades\n-# Feature request · Trading · Website\n"
+        "### Description\n> Add a button to accept all pending trades.\n"
+        "### Why it's needed\n> Accepting 20 trades one by one takes forever.\n"
         "-# Suggested by @someone · IDEA-0007"
     )
 
@@ -235,3 +235,12 @@ def test_banner_on_posts_sits_above_everything() -> None:
     assert container.children[0] is galleries[0]
     assert [i.media.url for i in galleries[0].items] == ["attachment://banner-price_check.png"]
     assert [i.media.url for i in galleries[1].items] == ["attachment://1-shot.png"]  # banner isn't in the gallery
+
+
+def test_price_check_as_text_keeps_headline_and_link() -> None:
+    submission = price_check()
+    submission.template = replace(submission.template, style="text")
+    _, body = body_of(submission, number=8)
+    assert body.startswith("## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now\n### Item\n> AK-47")
+    assert "\n\n" not in body  # no blank lines: headings already add their own space
+    assert body.endswith("🔗 [View on CSFloat](<https://csfloat.com/item/123>)\n-# Posted by @someone · PC-0008")

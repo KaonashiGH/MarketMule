@@ -407,13 +407,16 @@ async def refresh_scores(
     except discord.HTTPException:
         return
     if starter.content:
-        top_line, _, rest = starter.content.partition("\n")
-        if not top_line.startswith("-# "):
+        # The score goes on the first small (-#) line, which may sit under a ## headline.
+        lines = starter.content.split("\n")
+        index = next((i for i, line in enumerate(lines[:2]) if line.startswith("-# ")), None)
+        if index is None:
             return
-        new_top = with_score(top_line, rating, summary)
-        if new_top == top_line:
+        updated = with_score(lines[index], rating, summary)
+        if updated == lines[index]:
             return
-        changes: dict[str, Any] = {"content": f"{new_top}\n{rest}" if rest else new_top}
+        lines[index] = updated
+        changes: dict[str, Any] = {"content": "\n".join(lines)}
     else:
         card = card_with_score(starter, rating, summary)  # card posts keep the score in the card's small line
         if card is None:

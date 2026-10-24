@@ -74,11 +74,21 @@ def render(
     title = render_title(template.title_format, answers)
 
     rendered = [(section, block) for section in template.sections if (block := _render_section(section, answers))]
-    blocks = [_header_line(template, answers, icons)]
+    if template.card_title:
+        # Same start as a card: the member's headline, then the small line (the icon moves up to the headline).
+        headline = template.card_title.format_map(answers).strip()
+        top = f"## {_form_icon(template, icons)} {headline}".replace("##  ", "## ")
+        blocks = [top + "\n" + _header_line(template, answers, icons, plain=True)]
+    else:
+        blocks = [_header_line(template, answers, icons)]
     blocks += [block for section, block in rendered if not section.after_credit]
     blocks += [block for section, block in rendered if section.after_credit]  # e.g. a link, near the bottom
+    link = _link_button(template, answers)
+    if link is not None:
+        blocks.append(f"🔗 [{link.label}](<{link.url}>)")  # the text version of the card's link button
     blocks.append(_credit(template, author_mention, number))  # lowest priority, so always last
-    return title, split_message([icons.apply(block) for block in blocks])
+    # One line apart: Discord already adds space above each ### heading, so a blank line would double it.
+    return title, split_message([icons.apply(block) for block in blocks], separator="\n")
 
 
 TITLE_SEPARATOR = " · "
@@ -128,7 +138,7 @@ def _render_section(section: Section, answers: dict[str, str]) -> str | None:
     return f"### {section.heading}\n{body}" if section.heading else body
 
 
-def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT) -> list[str]:
+def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT, separator: str = "\n\n") -> list[str]:
     """Pack blocks into as few messages as possible without splitting a block unless it alone is too long."""
     messages: list[str] = []
     current = ""
@@ -142,7 +152,7 @@ def split_message(blocks: list[str], limit: int = MESSAGE_LIMIT) -> list[str]:
                 current = ""
             messages.append(block[:cut].rstrip())
             block = block[cut:].lstrip()
-        candidate = f"{current}\n\n{block}" if current else block
+        candidate = f"{current}{separator}{block}" if current else block
         if len(candidate) <= limit:
             current = candidate
         else:
