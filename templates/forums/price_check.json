@@ -42,7 +42,7 @@
          "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
         {"key": "question", "label": "Any extra details? (optional)", "style": "paragraph",
          "max_length": 1000, "required": false,
-         "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
+         "placeholder": "[e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?]"},
         {"key": "link", "label": "CSFloat link to the item (optional)", "max_length": 300, "required": false,
          "placeholder": "[e.g., https://csfloat.com/item/...]"},
         {"key": "screenshots", "type": "file", "label": "In-game and CS2 inspect screenshots", "max": 10,
