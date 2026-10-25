@@ -30,7 +30,7 @@
         {"key": "stickers", "label": "Provide sticker, charm & slab info", "style": "paragraph", "max_length": 400,
          "required": false,
          "description": "One per line, with type and condition (% scraped).",
-         "placeholder": "e.g. 2x Titan Kato 14 (paper) 0%\n1x CLG MLG 14 (holo) 10%\nButane Buddy #53243"},
+         "placeholder": "e.g. 2x Titan Kato 14 (paper) 0%\n1x CLG MLG 14 (holo) 10%\nButane Buddy #53243"}
       ]
     },
     {
