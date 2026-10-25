@@ -154,7 +154,7 @@ def card_texts(submission: Submission, icons: Icons = NO_ICONS) -> tuple[list[st
 
 def test_price_check_card_uses_headers_and_quotes() -> None:
     texts, children = card_texts(price_check())
-    assert texts[0] == "## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now"
+    assert texts[0] == "## 💰 Tier 2 Blue Gem AK\n-# Price Check"
     assert "### Item\n> AK-47 | Case Hardened" in texts
     # Every line of a long answer stays quoted.
     assert "### Question for the community\n> Is this tier 2?\n> How much over market?" in texts
@@ -242,7 +242,7 @@ def test_price_check_as_text_keeps_headline_and_link() -> None:
     submission.template = replace(submission.template, style="text")
     _, body = body_of(submission, number=8)
     assert body.startswith(
-        "## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now · Posted by @someone · PC-0008\n### Item\n> AK-47"
+        "## 💰 Tier 2 Blue Gem AK\n-# Price Check · Posted by @someone · PC-0008\n### Item\n> AK-47"
     )
     assert "\n\n" not in body  # no blank lines: headings already add their own space
     assert body.endswith("> How much over market?")  # credit is up top, so nothing sits above the pictures

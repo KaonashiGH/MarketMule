@@ -40,8 +40,6 @@
         {"key": "features", "type": "select", "tag": true, "label": "Item Features", "required": false,
         "max" : 3, "placeholder": "Pick up to 3 features that apply to your item (Optional)",
         "options": ["Case Hardened", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
-        {"key": "hold", "label": "Provide hold information", "max_length": 50,
-         "placeholder": "e.g. Tradable now / Tradable in 4 days"},
         {"key": "question", "label": "Any extra details? (optional)", "style": "paragraph",
          "max_length": 1000, "required": false,
          "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
@@ -59,7 +57,7 @@
   "banner": "pricecheck",
   "icon": "mm_pricecheck",
   "card_title": "{title}",
-  "header": ["hold"],
+  "header": [],
   "sections": [
     {"heading": "Item", "body": "> {item}"},
     {"heading": "Wear", "body": "> {wear}"},
