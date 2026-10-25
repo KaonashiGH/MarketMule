@@ -77,6 +77,6 @@
     "button_label": "Mark as priced",
     "text": "-# Happy with the answers? Press **Mark as priced** to close your price check."
   },
-  "tag_emojis": {"Price Check": "💰", "Needs pricing": "🔵", "Priced": "🟢", "Closed": "⚫"},
+  "tag_emojis": {"Price Check": "💰", "Needs Pricing": "🔵", "Priced": "🟢", "Closed": "⚫"},
   "reactions": ["💸", "❌"]
 }
