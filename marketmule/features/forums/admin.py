@@ -1,4 +1,4 @@
-"""Forum setup commands: /forums setup, /forums remove, /forums list.
+"""Forum setup commands: /forums setup, /forums remove, /forums list, /forums testpost.
 
 A forum channel can offer several forms. Running /forums setup again with another form adds it
 to the same channel and rebuilds the pinned Start here post with a section for each."""
@@ -17,7 +17,10 @@ from discord.ext import commands
 from marketmule.core.staff import get_staff_role
 
 from .forms import FormPanel, panel_thread_name
-from .posting import banner_file, fetch_thread
+from .posting import Submission, banner_file, fetch_thread, publish
+from .ratings import offer_rating
+from .samples import sample_answers
+from .status import offer_author_close
 from .storage import Binding
 from .tags import AUDIT_REASON, TagLimitError, find_tag, sync_forum_tags
 from .templates import Template
@@ -183,6 +186,48 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
 
     @setup.autocomplete("template")
     async def setup_template_autocomplete(
+        self, interaction: discord.Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        return form_choices(self.forums, current)
+
+    @app_commands.command(description="Post a filled-in test of a form, as you, without typing it out")
+    @app_commands.describe(
+        template="Which form to test",
+        picture="Optional screenshot, for forms that ask for pictures",
+    )
+    async def testpost(
+        self, interaction: discord.Interaction, template: str, picture: discord.Attachment | None = None
+    ) -> None:
+        """Answers come from each question's placeholder. Everything else is the real thing: same post,
+        tags, buttons and ratings as a member's submission. Delete the post when you're done."""
+        guild, member = interaction.guild, interaction.user
+        if guild is None or not isinstance(member, discord.Member):
+            return
+        form = self.forums.templates.get(template)
+        if form is None:
+            await interaction.response.send_message("Pick a form from the list.", ephemeral=True)
+            return
+        bindings = await self.forums.storage.list_bindings(guild.id)
+        binding = next((b for b in bindings if form.id in b.template_ids), None)
+        if binding is None:
+            await interaction.response.send_message(
+                f"No channel offers **{form.name}** yet. Run `/forums setup` first.", ephemeral=True
+            )
+            return
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        text, choices = sample_answers(form)
+        uploads = [f for f in form.fields if f.kind == "file"]
+        attachments = {uploads[0].key: [picture]} if picture and uploads else {}
+        submission = Submission(form, binding, member, text=text, choices=choices, attachments=attachments)
+        thread = await publish(self.forums, submission)
+        await offer_author_close(self.forums, form, thread)
+        await offer_rating(self.forums, form, thread)
+        log.info("%s posted a test %s", member, form.id)
+        await interaction.followup.send(f"Posted a test {form.name}: {thread.mention}", ephemeral=True)
+
+    @testpost.autocomplete("template")
+    async def testpost_template_autocomplete(
         self, interaction: discord.Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         return form_choices(self.forums, current)

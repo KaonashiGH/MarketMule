@@ -257,7 +257,7 @@ def test_price_check_as_text_keeps_headline_and_link() -> None:
 def test_title_shows_the_status_and_follows_it() -> None:
     template = TEMPLATES["price_check"]
     title, _ = body_of(price_check(), number=1)
-    assert title == "🔵 [Needs Pricing] - AK-47 | Case Hardened · Field-Tested 0.23456"
+    assert title == "[🔵 Needs Pricing] - AK-47 | Case Hardened · Field-Tested 0.23456"
     assert retitle(title, template, "Needs Pricing", "Priced") == (
         "[🟢 Priced] - AK-47 | Case Hardened · Field-Tested 0.23456"
     )
