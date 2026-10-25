@@ -20,15 +20,15 @@
       "fields": [
         {"key": "title", "label": "What's your question?", "max_length": 80,
          "description": "Keep it short. This is the headline of your post.",
-         "placeholder": "[e.g., Is this a Tier 2 blue gem?]"},
+         "placeholder": "*e.g.,* Is this a Tier 2 blue gem?"},
         {"key": "item", "label": "Provide the item name", "max_length": 100,
-         "placeholder": "[e.g., AK-47 | Case Hardened]"},
+         "placeholder": "*e.g.,* AK-47 | Case Hardened"},
         {"key": "wear", "label": "Provide the exact wear (Float)", "max_length": 50,
-         "placeholder": "[e.g., Field-Tested 0.23456]"},
+         "placeholder": "*e.g.,* Field-Tested 0.23456"},
         {"key": "pattern", "label": "Provide the pattern template/seed", "max_length": 50, "required": false,
-         "placeholder": "[e.g., Pattern #441 - skip if not applicable]"},
+         "placeholder": "*e.g.,* #441 - *skip if not applicable*"},
         {"key": "stickers", "label": "Provide any sticker info & condition", "style": "paragraph", "max_length": 400,
-         "required": false, "placeholder": "[e.g., 4x Titan Kato 15 - 0% Scraped - skip if not applicable]"}
+         "required": false, "placeholder": "*e.g.,* 4x Titan Kato 15 - 0% Scraped - *skip if not applicable*"}
       ]
     },
     {
@@ -36,15 +36,15 @@
       "title": "Price Check (2/2): Details",
       "fields": [
         {"key": "features", "type": "select", "tag": true, "label": "Item Features", "required": false,
-        "max" : 3, "placeholder": "Pick 3 features that apply to your item",
+        "max" : 3, "placeholder": "Pick up to 3 features that apply to your item (Optional)",
         "options": ["Case Hardended", "Fade", "Doppler", "Gamma Doppler","Rare Stickers", "Crimson web", "Slaughter", "Low Float","High Float", "Knife", "Glove", "Souvenir", "Overpay Check"]},
         {"key": "hold", "label": "Provide hold information", "max_length": 50,
-         "placeholder": "[e.g., Tradable now / Tradable in 4 days]"},
-        {"key": "question", "label": "Any extra details? (optional)", "style": "paragraph",
+         "placeholder": "*e.g.,* Tradable now / Tradable in 4 days"},
+        {"key": "question", "label": "Any extra details? *(optional)*", "style": "paragraph",
          "max_length": 1000, "required": false,
-         "placeholder": "e.g. Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
-        {"key": "link", "label": "CSFloat link to the item (optional)", "max_length": 300, "required": false,
-         "placeholder": "[e.g., https://csfloat.com/item/...]"},
+         "placeholder": "*e.g.* Does this pattern count as a Tier 2 Blue Gem, and how much over market should I expect?"},
+        {"key": "link", "label": "CSFloat link to the item *(optional)*", "max_length": 300, "required": false,
+         "placeholder": "*e.g.,* https://csfloat.com/item/..."},
         {"key": "screenshots", "type": "file", "label": "In-game and CS2 inspect screenshots", "max": 10,
          "description": "Don't forget to attach your in-game and CS2 inspect menu screenshots before hitting post!"}
       ]
