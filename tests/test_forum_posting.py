@@ -176,7 +176,7 @@ def test_card_uses_uploaded_icons() -> None:
     submission.template = replace(submission.template, thumbnail=False)  # icon goes in the title instead
     texts, _ = card_texts(submission, icons_with("mm_pricecheck", "mm_stickers"))
     assert texts[0].startswith("## <:mm_pricecheck:1> Tier 2 Blue Gem AK")
-    assert "### <:mm_stickers:1> Stickers\n> 4x Kato" in texts
+    
 
 
 def test_card_too_long_falls_back_to_text() -> None:

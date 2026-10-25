@@ -50,7 +50,8 @@ async def sync_forum_tags(forum: discord.ForumChannel, templates: Sequence[Templ
             if name.lower() not in existing:
                 existing.add(name.lower())
                 missing.append((name, moderated))
-
+    #create form status tags first before sorting/type tags 
+    missing.sort(key=lambda tag: not tag [1]) #moderated status first -> sort -> keep rest in order of oldest first 
     needed = len(forum.available_tags) + len(missing)
     if needed > MAX_FORUM_TAGS:
         raise TagLimitError(needed)

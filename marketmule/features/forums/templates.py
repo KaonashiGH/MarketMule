@@ -180,11 +180,13 @@ class Template:
 
     def forum_tags(self) -> list[tuple[str, bool]]:
         """Every tag the forum needs, as (name, moderated). Status tags are staff-only."""
-        tags = [(self.type_tag, False)]
-        tags += [(option, False) for f in self.tag_fields for option in f.options]
-        tags += [(status, True) for status in self.statuses]
-        return tags
 
+        """Status come first in setup because setup create tags in this order, discord shows a posts tags oldest first. Create first and repost all when status changes to maintain this as the first  """
+
+        tags= [(status, True) for status in self.statuses]
+        tags += [(self.type_tag, False)]
+        tags += [(option, False) for f in self.tag_fields for option in f.options]
+        return tags 
 
 def load_templates(directory: Path) -> dict[str, Template]:
     templates: dict[str, Template] = {}
