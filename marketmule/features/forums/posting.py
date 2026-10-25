@@ -16,7 +16,7 @@ from marketmule.core.icons import Icons
 
 from .storage import Binding, Post
 from .tags import find_tag, find_tags
-from .templates import MAX_POST_TAGS, PLACEHOLDER, Section, Template
+from .templates import MAX_POST_TAGS, PLACEHOLDER, STATUS_KEY, Section, Template
 
 if TYPE_CHECKING:
     from .context import ForumsContext
@@ -71,6 +71,7 @@ def render(
     """
     template = submission.template
     answers = submission.answers()
+    answers[STATUS_KEY] = template.status_label(template.initial_status)
     title = render_title(template.title_format, answers)
 
     rendered = [(section, block) for section in template.sections if (block := _render_section(section, answers))]
@@ -81,14 +82,29 @@ def render(
         blocks = [top + "\n" + _header_line(template, answers, icons, plain=True)]
     else:
         blocks = [_header_line(template, answers, icons)]
+    # Discord puts a message's pictures and buttons after all its text, so a credit at the end would sit above
+    # them. Instead it goes on the small line at the top: "-# Price Check · Tradable now · Posted by @x · PC-0015".
+    blocks[0] += " · " + _credit(template, author_mention, number).removeprefix("-# ")
     blocks += [block for section, block in rendered if not section.after_credit]
     blocks += [block for section, block in rendered if section.after_credit]  # e.g. a link, near the bottom
-    blocks.append(_credit(template, author_mention, number))  # lowest priority, so always last
     # One line apart: Discord already adds space above each ### heading, so a blank line would double it.
     return title, split_message([icons.apply(block) for block in blocks], separator="\n")
 
 
 TITLE_SEPARATOR = " · "
+
+
+def retitle(name: str, template: Template, old_status: str, new_status: str) -> str | None:
+    """The post's title with its status swapped, e.g. "🔵 Needs pricing - AK" → "🟢 Priced - AK".
+
+    None if the form's title doesn't show the status, or the old status isn't in the title (renamed by hand).
+    """
+    if "{" + STATUS_KEY + "}" not in template.title_format:
+        return None
+    old, new = template.status_label(old_status), template.status_label(new_status)
+    if old not in name:
+        return None
+    return name.replace(old, new, 1)[:MAX_THREAD_NAME]
 
 
 def render_title(title_format: str, answers: dict[str, str]) -> str:

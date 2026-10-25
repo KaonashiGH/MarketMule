@@ -4,7 +4,7 @@
   "type_tag": "Price Check",
   "id_prefix": "PC",
   "color": "#e0b12f",
- "title_format": "[Price Check] - {item} · {wear} · {pattern}",
+  "title_format": "{status} - {item} · {wear} · {pattern}",
   "panel": {
     "thread_name": "Start here: Price Checks",
     "title": "How to make a Price Check",
@@ -64,7 +64,7 @@
     {"heading": "Item", "body": "> {item}"},
     {"heading": "Wear", "body": "> {wear}"},
     {"heading": "Pattern", "body": "> {pattern}"},
-    {"heading": "Stickers", "body": "> {stickers}", "divider": true},
+    {"heading": "Stickers/Charms/Slabs", "body": "> {stickers}", "divider": true},
     {"heading": "Question for the community", "body": "> {question}"}
   ],
   "link_button": {"key": "link", "label": "View on CSFloat"},

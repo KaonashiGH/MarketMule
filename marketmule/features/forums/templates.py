@@ -10,6 +10,8 @@ from typing import Any
 
 # Matches {key} placeholders in title_format and section bodies.
 PLACEHOLDER = re.compile(r"\{(\w+)\}")
+# title_format may also use {status}: the post's status with its emoji, kept up to date, e.g. "🔵 Needs pricing".
+STATUS_KEY = "status"
 
 MAX_PAGE_ITEMS = 5
 MAX_MODAL_TITLE = 45
@@ -174,6 +176,10 @@ class Template:
         """Dropdowns whose answers are applied as forum tags."""
         return [f for f in self.fields if f.kind == "select" and f.tag]
 
+    def status_label(self, status: str) -> str:
+        """How a status reads in the title, e.g. "🔵 Needs pricing"."""
+        return f"{self.tag_emojis.get(status, '')} {status}".strip()
+
     @property
     def initial_status(self) -> str:
         return self.statuses[0]
@@ -311,7 +317,10 @@ def _validate(template: Template) -> list[str]:
     used += [("card_title", k) for k in PLACEHOLDER.findall(template.card_title or "")]
     if template.link_button is not None:
         used.append(("link_button", template.link_button.key))
+    known.add(STATUS_KEY)  # {status} is filled in by the bot, not by a question
     errors += [f"{where} uses {{{key}}}, but no question has that key" for where, key in used if key not in known]
+    if STATUS_KEY in keys:
+        errors.append(f"no question can use the key {STATUS_KEY!r}: it's reserved for the post's status")
 
     if template.style not in POST_STYLES:
         errors.append(f"style must be one of {sorted(POST_STYLES)}, not {template.style!r}")

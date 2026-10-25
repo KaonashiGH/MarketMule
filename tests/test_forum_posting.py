@@ -15,6 +15,7 @@ from marketmule.features.forums.posting import (
     render,
     render_card,
     render_title,
+    retitle,
     split_message,
     webhook_username,
 )
@@ -70,10 +71,9 @@ def test_feature_request_reads_like_a_post() -> None:
 
     assert title == "[Trading] - Bulk accept trades"
     assert body == (  # the plain-text version, used when answers are too long for a card
-        "## 💡 Bulk accept trades\n-# Feature request · Trading · Website\n"
+        "## 💡 Bulk accept trades\n-# Feature request · Trading · Website · Suggested by @someone · IDEA-0007\n"
         "### Description\n> Add a button to accept all pending trades.\n"
-        "### Why it's needed\n> Accepting 20 trades one by one takes forever.\n"
-        "-# Suggested by @someone · IDEA-0007"
+        "### Why it's needed\n> Accepting 20 trades one by one takes forever."
     )
 
 
@@ -94,7 +94,7 @@ def test_skipped_optional_questions_are_hidden() -> None:
     assert "N/A" not in body
     assert "**Trade ID / float:** 12345" in body
     assert "Steam profile" not in body  # skipped line is dropped, the rest of the section stays
-    assert body.endswith("Reported by @someone · BUG-0007")
+    assert "Reported by @someone · BUG-0007" in body.split("\n")[1]  # credit sits on the small top line
 
 
 def test_section_disappears_when_all_its_questions_are_skipped() -> None:
@@ -176,7 +176,6 @@ def test_card_uses_uploaded_icons() -> None:
     submission.template = replace(submission.template, thumbnail=False)  # icon goes in the title instead
     texts, _ = card_texts(submission, icons_with("mm_pricecheck", "mm_stickers"))
     assert texts[0].startswith("## <:mm_pricecheck:1> Tier 2 Blue Gem AK")
-    
 
 
 def test_card_too_long_falls_back_to_text() -> None:
@@ -242,12 +241,24 @@ def test_price_check_as_text_keeps_headline_and_link() -> None:
     submission = price_check()
     submission.template = replace(submission.template, style="text")
     _, body = body_of(submission, number=8)
-    assert body.startswith("## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now\n### Item\n> AK-47")
+    assert body.startswith(
+        "## 💰 Tier 2 Blue Gem AK\n-# Price Check · Tradable now · Posted by @someone · PC-0008\n### Item\n> AK-47"
+    )
     assert "\n\n" not in body  # no blank lines: headings already add their own space
-    assert body.endswith("> How much over market?\n-# Posted by @someone · PC-0008")
+    assert body.endswith("> How much over market?")  # credit is up top, so nothing sits above the pictures
 
     async def button() -> Any:
         return link_view(submission)
 
     (link,) = asyncio.run(button()).children  # a real button under the post, the same as on a card
     assert link.label == "View on CSFloat" and link.url == "https://csfloat.com/item/123"
+
+
+def test_title_shows_the_status_and_follows_it() -> None:
+    template = TEMPLATES["price_check"]
+    title, _ = body_of(price_check(), number=1)
+    assert title == "🔵 Needs pricing - AK-47 | Case Hardened · Field-Tested 0.23456"
+    assert retitle(title, template, "Needs pricing", "Priced") == (
+        "🟢 Priced - AK-47 | Case Hardened · Field-Tested 0.23456"
+    )
+    assert retitle("Renamed by staff", template, "Needs pricing", "Priced") is None  # leaves custom titles alone
