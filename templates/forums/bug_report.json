@@ -79,11 +79,11 @@
   "link_button": {"key": "steam_link", "label": "Steam profile"},
   "credit": "Reported by",
 
-  "statuses": ["Open", "In progress", "Fixed", "Denied", "Duplicate", "Closed"],
+  "statuses": ["Open", "In progress", "Fixed", "Not A Bug", "Duplicate", "Closed"],
   "final_statuses": ["Fixed", "Denied", "Duplicate", "Closed"],
   "tag_emojis": {
     "Bug": "🐞",
-    "Open": "🔵", "In progress": "🟡", "Fixed": "🟢", "Denied": "🔴", "Duplicate": "⚪", "Closed": "⚫"
+    "Open": "🔵", "In progress": "🟡", "Fixed": "🟢", "Not A Bug": "🔴", "Duplicate": "⚪", "Closed": "⚫"
   },
   "reactions": []
 }
