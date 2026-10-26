@@ -6,7 +6,6 @@ to the same channel and rebuilds the pinned Start here post with a section for e
 from __future__ import annotations
 
 import logging
-import re
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+from marketmule.core.discord_utils import FORUM_ONLY, fixed_choices, set_option
 from marketmule.core.staff import get_staff_role
 
 from .forms import FormPanel, panel_thread_name
@@ -46,60 +46,9 @@ REQUIRED_PERMISSIONS = {
 }
 
 
-def visible_forums(guild: discord.Guild) -> list[discord.ForumChannel]:
-    return [channel for channel in guild.forums if channel.permissions_for(guild.me).view_channel]
-
-
-def resolve_forum(guild: discord.Guild, value: str) -> discord.ForumChannel | None:
-    """Accept a channel ID (from autocomplete), a mention, or a typed name like #bug-reports."""
-    value = value.strip()
-    match = re.fullmatch(r"<#(\d+)>|(\d+)", value)
-    if match:
-        channel = guild.get_channel(int(match.group(1) or match.group(2)))
-    else:
-        name = value.lstrip("#").lower()
-        channel = discord.utils.find(lambda c: c.name.lower() == name, guild.channels)
-    return channel if isinstance(channel, discord.ForumChannel) else None
-
-
-def describe_missing_forum(guild: discord.Guild, value: str) -> str:
-    name = value.strip().lstrip("<#").rstrip(">").lstrip("#").lower()
-    match = discord.utils.find(lambda c: c.name.lower() == name or str(c.id) == name, guild.channels)
-    lines = []
-    if match is not None and not isinstance(match, discord.ForumChannel):
-        lines.append(f"{match.mention} is not a forum channel.")
-    elif match is None:
-        lines.append(f"Couldn't find a channel called `{value}`.")
-
-    visible = visible_forums(guild)
-    hidden = [forum for forum in guild.forums if forum not in visible]
-    lines.append("Forums the bot can see: " + (", ".join(f.mention for f in visible) or "none"))
-    if hidden:
-        lines.append("Forums the bot can't see (grant View Channel): " + ", ".join(f"#{f.name}" for f in hidden))
-    return "\n".join(lines)
-
-
 def missing_permissions(forum: discord.ForumChannel) -> list[str]:
     granted = forum.permissions_for(forum.guild.me)
     return [label for attr, label in REQUIRED_PERMISSIONS.items() if not getattr(granted, attr)]
-
-
-def forum_choices(interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-    if interaction.guild is None:
-        return []
-    current = current.lower()
-    return [
-        app_commands.Choice(name=f"#{forum.name}", value=str(forum.id))
-        for forum in visible_forums(interaction.guild)
-        if current in forum.name.lower()
-    ][:25]
-
-
-def form_choices(forums: ForumsContext, current: str) -> list[app_commands.Choice[str]]:
-    current = current.lower()
-    return [
-        app_commands.Choice(name=t.name, value=t.id) for t in forums.templates.values() if current in t.name.lower()
-    ][:25]
 
 
 @app_commands.default_permissions(manage_guild=True)
@@ -108,19 +57,23 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
     def __init__(self, forums: ForumsContext) -> None:
         self.forums = forums
         super().__init__()
+        # Fixed lists load instantly. Autocomplete had to answer within 3 seconds and often failed.
+        forms = fixed_choices((t.name, t.id) for t in forums.templates.values())
+        for command in ("setup", "testpost", "remove"):
+            set_option(self, command, "template", choices=forms, autocomplete=None)
+        # A real channel picker that only lists forum channels.
+        for command in ("setup", "remove"):
+            set_option(self, command, "channel", channel_types=FORUM_ONLY)
 
     @app_commands.command(description="Add a form to a forum channel and refresh its pinned Start here post")
     @app_commands.describe(channel="Forum channel", template="Form to add. Run again to add a second form.")
-    async def setup(self, interaction: discord.Interaction, channel: str, template: str) -> None:
+    async def setup(self, interaction: discord.Interaction, channel: discord.ForumChannel, template: str) -> None:
         guild = interaction.guild
         if guild is None:
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
 
-        forum = resolve_forum(guild, channel)
-        if forum is None:
-            await interaction.followup.send(describe_missing_forum(guild, channel), ephemeral=True)
-            return
+        forum = channel
         form = self.forums.templates.get(template)
         if form is None:
             await interaction.followup.send("Pick a form from the list.", ephemeral=True)
@@ -178,17 +131,7 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
             message += "\nRun `/marketmule staffrole` to choose which role can manage posts."
         await interaction.followup.send(message, ephemeral=True)
 
-    @setup.autocomplete("channel")
-    async def setup_channel_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return forum_choices(interaction, current)
 
-    @setup.autocomplete("template")
-    async def setup_template_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return form_choices(self.forums, current)
 
     @app_commands.command(description="Post a filled-in test of a form, as you, without typing it out")
     @app_commands.describe(
@@ -226,21 +169,18 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
         log.info("%s posted a test %s", member, form.id)
         await interaction.followup.send(f"Posted a test {form.name}: {thread.mention}", ephemeral=True)
 
-    @testpost.autocomplete("template")
-    async def testpost_template_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return form_choices(self.forums, current)
 
     @app_commands.command(description="Remove one form from a forum channel, or every form if none is picked")
     @app_commands.describe(channel="Forum channel", template="Form to remove. Leave empty to remove them all.")
-    async def remove(self, interaction: discord.Interaction, channel: str, template: str | None = None) -> None:
+    async def remove(
+        self, interaction: discord.Interaction, channel: discord.ForumChannel, template: str | None = None
+    ) -> None:
         guild = interaction.guild
         if guild is None:
             return
-        forum = resolve_forum(guild, channel)
-        binding = await self.forums.storage.get_binding(forum.id) if forum else None
-        if forum is None or binding is None:
+        forum = channel
+        binding = await self.forums.storage.get_binding(forum.id)
+        if binding is None:
             await interaction.response.send_message("That channel isn't set up.", ephemeral=True)
             return
         if template is not None and template not in binding.template_ids:
@@ -273,17 +213,7 @@ class ForumAdmin(commands.GroupCog, group_name="forums", group_description="Set 
             ephemeral=True,
         )
 
-    @remove.autocomplete("channel")
-    async def remove_channel_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return forum_choices(interaction, current)
 
-    @remove.autocomplete("template")
-    async def remove_template_autocomplete(
-        self, interaction: discord.Interaction, current: str
-    ) -> list[app_commands.Choice[str]]:
-        return form_choices(self.forums, current)
 
     @app_commands.command(name="list", description="Show which forums offer which forms")
     async def list_bindings(self, interaction: discord.Interaction) -> None:

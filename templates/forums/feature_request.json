@@ -4,12 +4,12 @@
   "type_tag": "Feature",
   "id_prefix": "IDEA",
   "color": "#2f62c9",
-  "title_format": "[{area}] - {summary}",
+  "title_format": "[{status}] - {area} · {summary}",
 
   "panel": {
     "thread_name": "Start here: Suggest a feature",
     "title": "How to suggest a feature",
-    "text": "Have an idea for CSFloat? Click **Suggest a feature** below.\n\n🔍 **Search this forum first.** If your idea is already here, vote on it with ✅ instead of posting a new one.\n\nThe form has two short steps:\n**1. Your idea:** where it applies, a title and a description\n**2. Details:** why it's needed, plus optional sketches or examples\n\nYour post is titled `[Area] - Title`, tagged, and posted here for the team to review. Other users can vote with ✅ or ❌.",
+    "text": "Have an idea for CSFloat? Click **Suggest a feature** below.\n\n🔍 **Search this forum first.** If your idea is already here, vote on it with ✅ instead of posting a new one.\n\nThe form has two short steps:\n**1. Your idea:** where it applies, a title and a description\n**2. Details:** why it's needed, plus optional sketches or examples\n\nYour post is titled with its status, the area and your title, tagged, and posted here for the team to review. Other users can vote with ✅ or ❌.",
     "button_label": "Suggest a feature",
     "button_style": "primary"
   },
@@ -28,12 +28,12 @@
         {"key": "category", "type": "select", "tag": true, "label": "Type of request (optional)", "required": false,
          "placeholder": "Pick one, or skip",
          "options": ["New feature", "Improvement", "UI & design", "Notifications"]},
-        {"key": "summary", "label": "Title", "max_length": 75,
-         "description": "Your post will be titled: [Area] - Title",
-         "placeholder": "Add a button to accept multiple trades at once"},
+        {"key": "summary", "label": "Title", "max_length": 60,
+         "description": "Keep it short. This is the headline of your post.",
+         "placeholder": "e.g. Add a button to accept multiple trades at once"},
         {"key": "description", "label": "Description of the feature", "style": "paragraph", "max_length": 1000,
          "description": "A clear, simple explanation of what you want us to add or change on CSFloat.",
-         "placeholder": "What should we add or change?"}
+         "placeholder": "e.g. A button on the trades page that accepts every pending trade at once"}
       ]
     },
     {
@@ -42,7 +42,7 @@
       "fields": [
         {"key": "why", "label": "Why is this needed?", "style": "paragraph", "max_length": 1000,
          "description": "Why would this be useful? How does it improve things for you and other users?",
-         "placeholder": "It would save time when..."},
+         "placeholder": "e.g. It would save time when I sell a lot of items on the same day"},
         {"key": "visuals", "type": "file", "label": "Visual examples (optional)", "required": false, "max": 10,
          "description": "Rough sketches, mockups or screenshots from other sites"},
         {"type": "note",
@@ -52,7 +52,7 @@
   ],
 
   "header": ["area", "platform", "category"],
-  "style": "card",
+  "style": "text",
   "thumbnail": false,
   "banner": "feature",
   "icon": "mm_feature",

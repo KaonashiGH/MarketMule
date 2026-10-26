@@ -21,6 +21,7 @@ import discord
 from discord import app_commands, ui
 from discord.ext import commands
 
+from marketmule.core.discord_utils import fixed_choices, set_option
 from marketmule.core.views import FixAnswersView, blocked_words_message
 
 from .posting import fetch_thread, webhook_username
@@ -487,6 +488,9 @@ async def offer_rating(forums: ForumsContext, template: Template, thread: discor
 class Leaderboard(commands.Cog):
     def __init__(self, forums: ForumsContext) -> None:
         self.forums = forums
+        # A fixed list of the forms that have ratings, so it loads instantly.
+        rated = fixed_choices((t.name, t.id) for t in forums.templates.values() if t.rating is not None)
+        set_option(self, "leaderboard", "form", choices=rated, autocomplete=None)
 
     @app_commands.command(name="leaderboard", description="Show the top-rated posts for a form")
     @app_commands.describe(form="Which form's leaderboard to show")
@@ -524,11 +528,3 @@ class Leaderboard(commands.Cog):
         embed.set_footer(text=f"Posts need at least {rating.leaderboard_min} ratings to be ranked.")
         await interaction.response.send_message(embed=embed, allowed_mentions=NO_MENTIONS)
 
-    @leaderboard.autocomplete("form")
-    async def form_autocomplete(self, interaction: discord.Interaction, current: str) -> list[app_commands.Choice[str]]:
-        current = current.lower()
-        return [
-            app_commands.Choice(name=t.name, value=t.id)
-            for t in self.forums.templates.values()
-            if t.rating is not None and current in t.name.lower()
-        ][:25]

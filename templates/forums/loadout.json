@@ -4,12 +4,12 @@
   "type_tag": "Loadout",
   "id_prefix": "LOAD",
   "color": "#d08a2e",
-  "title_format": "[Loadout] - {theme} - {budget}",
+  "title_format": "[{status}] - Loadout · {theme} · {budget}",
 
   "panel": {
     "thread_name": "Start here: Loadout help",
     "title": "🎨 Loadout Lab",
-    "text": "Need help finishing a loadout? Build it in the **CSFloat Loadout Lab** first, then click **Post a loadout** and paste its Share URL.\n\nTell the community what you're going for and what you need solved. Your post is titled `[Loadout] - Theme - Budget`.",
+    "text": "Need help finishing a loadout? Build it in the **CSFloat Loadout Lab** first, then click **Post a loadout** and paste its Share URL.\n\nTell the community what you're going for and what you need solved. Your post is titled with its status, theme and budget.",
     "button_label": "Post a loadout",
     "button_style": "success"
   },
@@ -20,25 +20,25 @@
       "title": "Loadout Lab",
       "fields": [
         {"key": "theme", "label": "Primary theme or color", "max_length": 40,
-         "description": "Your post will be titled: [Loadout] - Theme - Budget",
-         "placeholder": "Black & Gold"},
+         "description": "Keep it short. This is the headline of your post.",
+         "placeholder": "e.g. Black & Gold"},
         {"key": "budget", "label": "Total budget", "max_length": 20,
-         "placeholder": "$1,500"},
+         "placeholder": "e.g. $1,500"},
         {"key": "link", "label": "Loadout Lab share link", "max_length": 300,
          "description": "Build your inventory in CSFloat Loadout Lab, then paste the Share URL it generates.",
-         "placeholder": "Paste your Share URL here"},
+         "placeholder": "e.g. https://csfloat.com/..."},
         {"key": "vision", "label": "Your vision for the loadout", "style": "paragraph", "max_length": 1000,
          "description": "What are you going for? Matching an Agent? Building around a pair of gloves?",
-         "placeholder": "I'm building around ... and want everything to match ..."},
+         "placeholder": "e.g. Building around Sport Gloves | Vice, with everything in pink and blue"},
         {"key": "question", "label": "What do you need help with? (optional)", "style": "paragraph", "max_length": 1000, "required": false,
          "description": "Clearly state what you need the community to solve.",
-         "placeholder": "Which AK would fit best for under $300?"}
+         "placeholder": "e.g. Which AK would fit best for under $300?"}
       ]
     }
   ],
 
   "header": ["budget"],
-  "style": "card",
+  "style": "text",
   "thumbnail": false,
   "banner": "loadout",
   "icon": "mm_loadout",

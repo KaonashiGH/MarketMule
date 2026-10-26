@@ -4,12 +4,12 @@
   "type_tag": "Bug",
   "id_prefix": "BUG",
   "color": "#b83d32",
-  "title_format": "[{area}] - {summary}",
+  "title_format": "[{status}] - {area} · {summary}",
 
   "panel": {
     "thread_name": "Start here: Report a bug",
     "title": "How to report a bug",
-    "text": "Found something broken on CSFloat? Click **Report a bug** below.\n\nThe form has three short steps:\n**1. The bug:** what's broken and how to make it happen\n**2. Your setup:** platform, extension, browser and account details\n**3. Screenshots:** optional, but they help us fix it much faster\n\nYour post is titled `[Area] - Short description`, tagged, and posted here for the team. One bug per report, please.",
+    "text": "Found something broken on CSFloat? Click **Report a bug** below.\n\nThe form has three short steps:\n**1. The bug:** what's broken and how to make it happen\n**2. Your setup:** platform, extension, browser and account details\n**3. Screenshots:** optional, but they help us fix it much faster\n\nYour post is titled with its status, the area and your short description, tagged, and posted here for the team. One bug per report, please.",
     "button_label": "Report a bug",
     "button_style": "danger"
   },
@@ -21,15 +21,15 @@
       "fields": [
         {"key": "area", "type": "select", "tag": true, "label": "Area of the site",
          "options": ["Marketplace", "Trading", "Chrome Extension", "Database", "Account", "Other"]},
-        {"key": "summary", "label": "Short description", "max_length": 75,
-         "description": "Becomes your title: [Area] - Short description",
-         "placeholder": "Float values overlap item names on Steam inventory"},
-        {"key": "description", "label": "1. Description of the bug", "style": "paragraph", "max_length": 1000,
-         "placeholder": "What is broken, and where on the site?"},
-        {"key": "steps", "label": "2. Steps to reproduce", "style": "paragraph", "max_length": 1000,
-         "placeholder": "1. Open...\n2. Click...\n3. See..."},
-        {"key": "expected_actual", "label": "3. Expected vs. actual behavior", "style": "paragraph", "max_length": 800,
-         "placeholder": "Expected: ...\nActual: ..."}
+        {"key": "summary", "label": "Short description", "max_length": 60,
+         "description": "Keep it short. This is the headline of your post.",
+         "placeholder": "e.g. Float values overlap item names on Steam inventory"},
+        {"key": "description", "label": "Description of the bug", "style": "paragraph", "max_length": 1000,
+         "placeholder": "e.g. On my Steam inventory page, the float values cover the item names"},
+        {"key": "steps", "label": "Steps to reproduce", "style": "paragraph", "max_length": 1000,
+         "placeholder": "e.g. 1. Open your Steam inventory\n2. Turn on float display\n3. Scroll down"},
+        {"key": "expected_actual", "label": "Expected vs. actual behavior", "style": "paragraph", "max_length": 800,
+         "placeholder": "e.g. Expected: floats show under the names\nActual: floats cover the names"}
       ]
     },
     {
@@ -39,13 +39,14 @@
         {"key": "platform", "type": "select", "label": "Platform",
          "options": ["Web Desktop", "Web Mobile", "Mobile App"]},
         {"key": "browser_os", "label": "Browser & OS", "max_length": 100,
-         "placeholder": "Chrome 118, Windows 11"},
+         "placeholder": "e.g. Chrome 141, Windows 11"},
         {"key": "version", "label": "Browser/app version", "max_length": 100, "required": false,
-         "placeholder": "Version 155.0.8059.85 (Official Build) (64-bit)"},
+         "placeholder": "e.g. 155.0.8059.85 (Official Build) (64-bit)"},
         {"key": "steam_link", "label": "Steam profile link (optional)", "max_length": 200, "required": false,
-         "placeholder": "https://steamcommunity.com/id/..."},
+         "placeholder": "e.g. https://steamcommunity.com/id/..."},
         {"key": "trade_ref", "label": "Trade ID or item float (optional)", "max_length": 100, "required": false,
-         "placeholder": "Leave empty if it doesn't apply"}
+         "description": "Leave empty if it doesn't apply.",
+         "placeholder": "e.g. Trade 12345678 or float 0.07123"}
       ]
     },
     {
@@ -54,7 +55,7 @@
       "fields": [
         {"type": "note",
          "text": "### Got a screenshot or recording?\nIt's the fastest way for us to see the bug. **Not required.** Leave it empty and press **Submit** to post without one."},
-        {"key": "evidence", "type": "file", "label": "6. Visual evidence (optional)", "required": false, "max": 10,
+        {"key": "evidence", "type": "file", "label": "Screenshots or recording (optional)", "required": false, "max": 10,
          "description": "Screenshots or a short screen recording"},
         {"key": "category", "type": "select", "tag": true, "label": "Category (optional)", "required": false, "max": 2,
          "placeholder": "Pick up to 2, or skip",
@@ -64,7 +65,7 @@
   ],
 
   "header": ["area", "platform", "category"],
-  "style": "card",
+  "style": "text",
   "thumbnail": false,
   "banner": "bug",
   "icon": "mm_bug",

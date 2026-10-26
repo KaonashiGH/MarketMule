@@ -76,3 +76,23 @@ def test_status_tag_always_comes_first() -> None:
     tags = [tag("Fade"), tag("Price Check"), tag("Needs pricing"), tag("Doppler")]
     ordered = status_first(tags, ["Needs pricing", "Priced", "Closed"])
     assert [t.name for t in ordered] == ["Needs pricing", "Fade", "Price Check", "Doppler"]
+
+
+def test_placeholders_are_clean_examples() -> None:
+    """Typed answers show an example starting with "e.g.". Discord shows placeholders as plain grey text,
+    so brackets and * would show up as-is."""
+    for template in load_templates(FORUM_TEMPLATES).values():
+        for field in template.fields:
+            if field.kind != "text" or not field.placeholder:
+                continue
+            where = f"{template.id}.{field.key}: {field.placeholder!r}"
+            assert field.placeholder.startswith("e.g. "), where
+            assert not any(c in field.placeholder for c in "[]*"), where
+
+
+def test_every_form_matches_the_price_check_style() -> None:
+    for template in load_templates(FORUM_TEMPLATES).values():
+        assert template.style == "text", template.id
+        assert template.thumbnail is False, template.id
+        assert template.title_format.startswith("[{status}] - "), template.id
+        assert all(template.tag_emojis.get(status) for status in template.statuses), template.id

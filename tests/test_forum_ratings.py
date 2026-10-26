@@ -268,3 +268,22 @@ def test_card_posts_show_the_score_in_their_small_line() -> None:
     content, unchanged = asyncio.run(scenario())
     assert content.endswith("-# Loadout · $1,500 · ⭐ 31.5/40")
     assert not unchanged
+
+
+def test_text_posts_show_the_score_in_their_small_line() -> None:
+    """Text posts keep the score at the end of the small line under the headline, like cards do."""
+    from marketmule.features.forums.posting import Submission, render
+    from marketmule.features.forums.storage import Binding
+
+    template = LOADOUT
+    assert template.rating is not None
+    binding = Binding(channel_id=1, guild_id=1, template_ids=("loadout",), webhook_url=None, panel_thread_id=None)
+    text = {"theme": "Black & Gold", "budget": "$1,500", "link": "https://csfloat.com/x", "vision": "Gold"}
+    submission = Submission(template, binding, cast(Any, None), text=text)
+    _, (first, *_) = render(submission, number=1, author_mention="@someone")
+    headline, small, *_ = first.split("\n")
+    assert headline == "## 🎨 Black & Gold"
+    assert small == "-# Loadout · $1,500 · Posted by @someone · LOAD-0001"
+    rated = with_score(small, template.rating, RatingSummary(31.5, 2))
+    assert rated == small + " · ⭐ 31.5/40"
+    assert with_score(rated, template.rating, RatingSummary(33, 3)) == small + " · ⭐ 33/40"  # replaced, not added

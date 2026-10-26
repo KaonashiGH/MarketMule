@@ -20,7 +20,7 @@ from marketmule.features.forums.posting import (
     webhook_username,
 )
 from marketmule.features.forums.storage import Binding
-from marketmule.features.forums.templates import load_templates
+from marketmule.features.forums.templates import PLACEHOLDER, load_templates
 
 TEMPLATES = load_templates(PROJECT_ROOT / "templates" / "forums")
 
@@ -69,8 +69,8 @@ def test_feature_request_reads_like_a_post() -> None:
     )
     title, body = body_of(submission)
 
-    assert title == "[Trading] - Bulk accept trades"
-    assert body == (  # the plain-text version, used when answers are too long for a card
+    assert title == "[🔵 Under review] - Trading · Bulk accept trades"
+    assert body == (  # text style, like the price check
         "## 💡 Bulk accept trades\n-# Feature request · Trading · Website · Suggested by @someone · IDEA-0007\n"
         "### Description\n> Add a button to accept all pending trades.\n"
         "### Why it's needed\n> Accepting 20 trades one by one takes forever."
@@ -262,3 +262,53 @@ def test_title_shows_the_status_and_follows_it() -> None:
         "[🟢 Priced] - AK-47 | Case Hardened · Field-Tested 0.23456"
     )
     assert retitle("Renamed by staff", template, "Needs pricing", "Priced") is None  # leaves custom titles alone
+
+
+def test_bug_and_feature_titles_show_the_status_and_follow_it() -> None:
+    bug = make_submission(
+        "bug_report", {"area": ["Marketplace"], "platform": ["Web Desktop"]}, summary="Floats overlap names"
+    )
+    title, _ = body_of(bug)
+    assert title == "[🔵 Open] - Marketplace · Floats overlap names"
+    assert retitle(title, bug.template, "Open", "Fixed") == "[🟢 Fixed] - Marketplace · Floats overlap names"
+    idea = make_submission("feature_request", {"area": ["Trading"]}, summary="Bulk accept")
+    title, _ = body_of(idea)
+    assert retitle(title, idea.template, "Under review", "Planned") == "[🟣 Planned] - Trading · Bulk accept"
+
+
+def test_titles_are_never_cut_off() -> None:
+    """The longest status plus full-length answers still fit Discord's 100-character post title, counted the
+    way Discord counts (an emoji like 🔵 counts as 2). Price check is left out: its item name alone can be 100."""
+    for template in TEMPLATES.values():
+        if template.id == "price_check":
+            continue
+        fields = {f.key: f for f in template.fields}
+        for status in template.statuses:
+            answers = _Answers(status=template.status_label(status))
+            for key in PLACEHOLDER.findall(template.title_format):
+                if key in fields:
+                    f = fields[key]
+                    answers[key] = max(f.options, key=len) if f.options else "x" * (f.max_length or 100)
+            title = template.title_format.format_map(answers)
+            assert len(title.encode("utf-16-le")) // 2 <= 100, (template.id, status, title)
+
+
+def test_bug_report_is_a_text_post_like_the_price_check() -> None:
+    submission = make_submission(
+        "bug_report",
+        {"area": ["Marketplace"], "platform": ["Web Desktop"], "category": ["UI/UX"]},
+        summary="Floats overlap names",
+        description="Floats cover the names.",
+        steps="1. Open inventory\n2. Scroll",
+        expected_actual="Expected: under\nActual: over",
+        browser_os="Chrome 141, Windows 11",
+    )
+    _, body = body_of(submission, number=3)
+    assert body.startswith(
+        "## 🐞 Floats overlap names\n"
+        "-# Bug report · Marketplace · Web Desktop · UI/UX · Reported by @someone · BUG-0003\n"
+    )
+    assert "### Steps to reproduce\n> 1. Open inventory\n> 2. Scroll\n" in body  # every line stays quoted
+    # The skipped version line is dropped, and so is the whole skipped Account & trade section.
+    assert body.endswith("### Setup\n> **Browser & OS:** Chrome 141, Windows 11")
+    assert "\n\n" not in body
