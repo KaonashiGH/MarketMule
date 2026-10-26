@@ -186,7 +186,7 @@ def render_card(
 ) -> ui.LayoutView | None:
     """Build a card post: a colored box with a title, one block per section, dividers, pictures and a link button.
 
-    Returns None if the answers are too long for one card, so the caller can post plain text instead.
+    Returns None if the answers are too long for one card, caller will post plain text instead.
     """
     template = submission.template
     answers = submission.answers()
@@ -238,9 +238,11 @@ def render_card(
 def _link_button(template: Template, answers: dict[str, str]) -> ui.Button | None:
     if template.link_button is None:
         return None
-    url = answers[template.link_button.key].strip()
+    url = answers[template.link_button.key].strip().strip("<>")
+    if url and not url.lower().startswith(("http://", "https://")):
+        url = "https://" + url  # e.g. steamcommunity.com/id/name still gets its button
     if not re.fullmatch(r"https?://\S+", url) or len(url) > 512:
-        return None  # not a usable link, so leave the button off rather than fail the post
+        return None  # if not a usable link
     return ui.Button(label=template.link_button.label, url=url, style=discord.ButtonStyle.link)
 
 

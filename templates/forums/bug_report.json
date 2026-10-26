@@ -53,13 +53,12 @@
       "name": "Screenshots",
       "title": "Bug Report (3/3): Screenshots",
       "fields": [
-        {"type": "note",
-         "text": "### Got a screenshot or recording?\nIt's the fastest way for us to see the bug. **Not required.** Leave it empty and press **Submit** to post without one."},
-        {"key": "evidence", "type": "file", "label": "Screenshots or recording (optional)", "required": false, "max": 10,
-         "description": "Screenshots or a short screen recording"},
         {"key": "category", "type": "select", "tag": true, "label": "Category (optional)", "required": false, "max": 2,
          "placeholder": "Pick up to 2, or skip",
-         "options": ["UI/UX", "Performance", "Functionality"]}
+         "options": ["UI/UX", "Performance", "Functionality"]},
+        {"type": "note",
+         "text": "### Got a screenshot or recording?\nIt's the fastest way for us to see the bug. **Not required.** Leave it empty and press **Submit** to post without one."},
+        {"key": "evidence", "type": "file", "label": "Screenshots or recording (optional)", "required": false, "max": 10}
       ]
     }
   ],
@@ -75,8 +74,9 @@
     {"heading": "Steps to reproduce", "body": "> {steps}"},
     {"heading": "Expected vs. actual", "body": "> {expected_actual}"},
     {"heading": "Setup", "body": "> **Browser & OS:** {browser_os}\n> **Version:** {version}", "divider": true},
-    {"heading": "Account & trade", "body": "> **Steam profile:** {steam_link}\n> **Trade ID / float:** {trade_ref}"}
+    {"heading": "Account & trade", "body": "> **Trade ID / float:** {trade_ref}"}
   ],
+  "link_button": {"key": "steam_link", "label": "Steam profile"},
   "credit": "Reported by",
 
   "statuses": ["Open", "In progress", "Fixed", "Denied", "Duplicate", "Closed"],
