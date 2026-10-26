@@ -83,7 +83,7 @@
   "final_statuses": ["Fixed", "Denied", "Duplicate", "Closed"],
   "tag_emojis": {
     "Bug": "🐞",
-    "Open": "🔵", "In progress": "🟡", "Fixed": "🟢", "Not A Bug": "🔴", "Duplicate": "⚪", "Closed": "⚫"
+    "Open": "🔵", "In progress": "🟡", "Fixed": "🟢", "Not A Bug": "❌", "Duplicate": "⚪", "Closed": "⚫"
   },
   "reactions": []
 }
