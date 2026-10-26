@@ -310,5 +310,5 @@ def test_bug_report_is_a_text_post_like_the_price_check() -> None:
     )
     assert "### Steps to reproduce\n> 1. Open inventory\n> 2. Scroll\n" in body  # every line stays quoted
     # The skipped version line is dropped, and so is the whole skipped Account & trade section.
-    assert body.endswith("### Setup\n> **Browser & OS:** Chrome 141, Windows 11")
+    assert body.endswith("### Setup\n> **Platform:** Web Desktop\n> **Browser & OS:** Chrome 141, Windows 11")
     assert "\n\n" not in body

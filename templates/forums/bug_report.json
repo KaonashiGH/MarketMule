@@ -63,7 +63,7 @@
     }
   ],
 
-  "header": ["area", "platform", "category"],
+  "header": ["area", "category"],
   "style": "text",
   "thumbnail": false,
   "banner": "bug",
@@ -73,7 +73,7 @@
     {"heading": "Description", "body": "> {description}"},
     {"heading": "Steps to reproduce", "body": "> {steps}"},
     {"heading": "Expected vs. actual", "body": "> {expected_actual}"},
-    {"heading": "Setup", "body": "> **Browser & OS:** {browser_os}\n> **Version:** {version}", "divider": true},
+    {"heading": "Setup", "body": "> **Platform:** {platform}\n> **Browser & OS:** {browser_os}\n> **Version:** {version}", "divider": true},
     {"heading": "Account & trade", "body": "> **Trade ID / float:** {trade_ref}"}
   ],
   "link_button": {"key": "steam_link", "label": "Steam profile"},
