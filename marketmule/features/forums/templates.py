@@ -26,6 +26,9 @@ MAX_POST_TAGS = 5
 MAX_BUTTON_LABEL = 80
 MAX_MESSAGE = 2000
 MAX_CATEGORY_SCORE = 10
+MAX_COMMAND_DESCRIPTION = 100
+COMMAND_NAME = re.compile(r"[a-z0-9_-]{1,32}")
+LONGEST_MENTION = "<@12345678901234567890>"
 
 FIELD_KINDS = frozenset({"text", "select", "file", "note"})
 POST_STYLES = frozenset({"text", "card"})
@@ -98,6 +101,21 @@ class AuthorClose:
 
 
 @dataclass(frozen=True)
+class StaffShortcut:
+    """A staff slash command that sets a post's status and posts a ready-made message, e.g. /nab.
+
+    In the message, {user} becomes a ping of the person who posted. The optional button opens a link.
+    """
+
+    command: str
+    description: str
+    status: str
+    message: str
+    button_label: str | None = None
+    button_url: str | None = None
+
+
+@dataclass(frozen=True)
 class RatingCategory:
     """One line of a rating rubric, scored 1-10."""
 
@@ -149,6 +167,7 @@ class Template:
     header: tuple[str, ...] = ()
     credit: str = "Submitted by"
     author_close: AuthorClose | None = None
+    staff_shortcuts: tuple[StaffShortcut, ...] = ()
     rating: Rating | None = None
     style: str = "text"
     icon: str | None = None
@@ -179,6 +198,9 @@ class Template:
     def status_label(self, status: str) -> str:
         """How a status reads in the title, e.g. "🔵 Needs pricing"."""
         return f"{self.tag_emojis.get(status, '')} {status}".strip()
+
+    def shortcut(self, command: str) -> StaffShortcut | None:
+        return next((s for s in self.staff_shortcuts if s.command == command), None)
 
     @property
     def initial_status(self) -> str:
@@ -252,6 +274,7 @@ def _parse_template(raw: dict[str, Any]) -> Template:
         header=tuple(raw.get("header", ())),
         credit=raw.get("credit", "Submitted by"),
         author_close=AuthorClose(**raw["author_close"]) if raw.get("author_close") else None,
+        staff_shortcuts=tuple(StaffShortcut(**s) for s in raw.get("staff_shortcuts", ())),
         rating=_parse_rating(raw["rating"]) if raw.get("rating") else None,
         style=raw.get("style", "text"),
         icon=raw.get("icon"),
@@ -338,6 +361,8 @@ def _validate(template: Template) -> list[str]:
         if not 1 <= len(close.text) <= MAX_MESSAGE:
             errors.append(f"author_close text needs 1-{MAX_MESSAGE} characters")
 
+    errors += _validate_shortcuts(template)
+
     if template.rating is not None:
         errors += _validate_rating(template.rating)
 
@@ -368,6 +393,29 @@ def _validate_field(field: Field) -> list[str]:
         errors.append(f"dropdown {name!r} needs 1-{MAX_SELECT_OPTIONS} options")
     if field.kind == "file" and not 1 <= field.max_values <= MAX_UPLOADS:
         errors.append(f"upload {name!r} allows 1-{MAX_UPLOADS} files")
+    return errors
+
+
+def _validate_shortcuts(template: Template) -> list[str]:
+    errors: list[str] = []
+    names = [shortcut.command for shortcut in template.staff_shortcuts]
+    errors += [f"staff shortcut /{name} is listed twice" for name in sorted({n for n in names if names.count(n) > 1})]
+    for shortcut in template.staff_shortcuts:
+        name = f"staff shortcut /{shortcut.command}"
+        if not COMMAND_NAME.fullmatch(shortcut.command):
+            errors.append(f"{name}: command must be 1-32 lowercase letters, numbers, - or _")
+        if not 1 <= len(shortcut.description) <= MAX_COMMAND_DESCRIPTION:
+            errors.append(f"{name}: description needs 1-{MAX_COMMAND_DESCRIPTION} characters")
+        if shortcut.status not in template.statuses:
+            errors.append(f"{name}: status {shortcut.status!r} is not listed in statuses")
+        if not shortcut.message or len(shortcut.message.replace("{user}", LONGEST_MENTION)) > MAX_MESSAGE:
+            errors.append(f"{name}: message needs 1-{MAX_MESSAGE} characters")
+        if (shortcut.button_label is None) != (shortcut.button_url is None):
+            errors.append(f"{name}: button_label and button_url go together")
+        if shortcut.button_label is not None and not 1 <= len(shortcut.button_label) <= MAX_BUTTON_LABEL:
+            errors.append(f"{name}: button_label needs 1-{MAX_BUTTON_LABEL} characters")
+        if shortcut.button_url is not None and not shortcut.button_url.startswith("https://"):
+            errors.append(f"{name}: button_url must start with https://")
     return errors
 
 

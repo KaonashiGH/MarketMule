@@ -29,8 +29,21 @@ log = logging.getLogger(__name__)
 CLOSE_BUTTON_PREFIX = "marketmule:forums:close:"
 
 
-async def set_status(forums: ForumsContext, post: Post, template: Template, actor: discord.Member, status: str) -> str:
-    """Swap the post's status tag, announce it in the post, and lock the post if the status is final."""
+async def set_status(
+    forums: ForumsContext,
+    post: Post,
+    template: Template,
+    actor: discord.Member,
+    status: str,
+    *,
+    announcement: str | None = None,
+    view: ui.View | None = None,
+) -> str:
+    """Swap the post's status tag, announce it in the post, and lock the post if the status is final.
+
+    `announcement` replaces the usual "set the status to" message, e.g. a staff shortcut's ready-made reply.
+    It's posted before the post is locked, so it's the last message in it.
+    """
     thread = await fetch_thread(actor.guild, post.thread_id)
     if thread.archived or thread.locked:
         thread = await thread.edit(archived=False, locked=False)
@@ -41,7 +54,15 @@ async def set_status(forums: ForumsContext, post: Post, template: Template, acto
     name = retitle(thread.name, template, post.status, status)  # e.g. 🔵 Needs pricing → 🟢 Priced
     thread = await thread.edit(applied_tags=tags, **({"name": name} if name else {}))
 
-    if actor.id == post.reporter_id:
+    if announcement is not None:
+        await thread.send(
+            announcement,
+            **({"view": view} if view is not None else {}),
+            allowed_mentions=discord.AllowedMentions(
+                everyone=False, roles=False, users=[discord.Object(post.reporter_id)]
+            ),
+        )
+    elif actor.id == post.reporter_id:
         await thread.send(f"{actor.mention} marked this post as **{status}**.")
     else:
         # Staff changed it, so ping the person who posted.

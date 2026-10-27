@@ -14,6 +14,7 @@ Files:
     admin.py      /forums setup, remove, list (a channel can offer several forms)
     staff.py      Manage post tool
     status.py     changing a post's status, and the poster's own close button
+    shortcuts.py  staff shortcut commands from templates, e.g. /nab
     ratings.py    member ratings with a rubric, and /leaderboard
     rating_moderation.py  staff tools: Remove rating, /ratings block, unblock, blocked
 """

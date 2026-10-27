@@ -80,7 +80,15 @@
   "credit": "Reported by",
 
   "statuses": ["Open", "In progress", "Fixed", "Not A Bug", "Duplicate", "Closed"],
-  "final_statuses": ["Fixed", "Denied", "Duplicate", "Closed"],
+  "final_statuses": ["Fixed", "Not A Bug", "Duplicate", "Closed"],
+  "staff_shortcuts": [
+    {"command": "nab",
+     "description": "Close as Not A Bug and send the poster to a support ticket",
+     "status": "Not A Bug",
+     "message": "Hi {user}, thanks for the report. This isn't a bug with the site, so it's best handled by our support team. Account-specific issues can't be discussed on Discord, so please open a ticket here: https://csfloat.com/support",
+     "button_label": "Open a support ticket",
+     "button_url": "https://csfloat.com/support"}
+  ],
   "tag_emojis": {
     "Bug": "🐞",
     "Open": "🔵", "In progress": "🟡", "Fixed": "🟢", "Not A Bug": "❌", "Duplicate": "⚪", "Closed": "⚫"

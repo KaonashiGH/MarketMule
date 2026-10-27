@@ -1,4 +1,5 @@
-"""Staff tools for managing posts, hidden from members: a right-click "Manage post" menu and /manage."""
+"""Staff tools for managing posts, hidden from members: a right-click "Manage post" menu, /manage, and the
+staff shortcuts set up in templates (such as /nab, see shortcuts.py)."""
 
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from marketmule.core.staff import is_staff
 
 from .forms import build_select
 from .posting import fetch_thread
+from .shortcuts import build_shortcut_commands
 from .status import set_status
 from .storage import Post
 from .tags import find_tags, set_thread_tags, status_first
@@ -95,12 +97,24 @@ class ForumStaff(commands.Cog):
         self.forums = forums
         # Context menus can't be declared inside a cog, so this one is added to the tree on load.
         self.manage_menu = app_commands.ContextMenu(name="Manage post", callback=self.manage_from_menu)
+        self.shortcuts: list[app_commands.Command] = []
 
     async def cog_load(self) -> None:
-        self.forums.bot.tree.add_command(self.manage_menu)
+        tree = self.forums.bot.tree
+        tree.add_command(self.manage_menu)
+        for command in build_shortcut_commands(self.forums):
+            if tree.get_command(command.name) is not None:
+                log.error("Staff shortcut /%s skipped: another command already uses that name", command.name)
+                continue
+            tree.add_command(command)
+            self.shortcuts.append(command)
 
     async def cog_unload(self) -> None:
-        self.forums.bot.tree.remove_command(self.manage_menu.name, type=self.manage_menu.type)
+        tree = self.forums.bot.tree
+        tree.remove_command(self.manage_menu.name, type=self.manage_menu.type)
+        for command in self.shortcuts:
+            tree.remove_command(command.name)
+        self.shortcuts.clear()
 
     @app_commands.default_permissions(manage_threads=True)
     @app_commands.guild_only()
