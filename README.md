@@ -3,7 +3,7 @@
 A Discord bot built from independent features:
 
 - **Forums:** members fill in a form, and the bot publishes a clean, tagged forum post under their name. A channel can offer one form (bug reports) or several (loadouts and trade-ups), each with its own button on the pinned post. Posts can be rated with a rubric.
-- **Stalls:** each member gets one persistent shop post and manages its items with buttons.
+- **Stalls:** each member writes their own shop post, laid out however they like. Replies are off, so only the bot can bump stalls, with a cooldown.
 
 ## Project layout
 
@@ -39,7 +39,11 @@ Rules: `core/` never imports from `features/`, and features never import from ea
 | `/leaderboard form` | Everyone | Shows the top-rated posts for a form that has a rating rubric. |
 | **Apps → Remove rating** | Staff | On a rating: deletes it and takes its score out of the average and leaderboard. |
 | `/ratings block member [reason]` | Staff | Stops a member from rating. `/ratings unblock` undoes it, `/ratings blocked` lists them. |
-| `/stalls setup channel` | Manage Server | Makes a forum the stalls channel and pins its Open my stall post. |
+| `/stalls setup channel` | Manage Server | Makes a forum the stalls channel and pins its Start here post. Run again to refresh it. |
+| `/stalls remove channel` | Manage Server | Stops using a forum for stalls. Existing posts stay. |
+| `/stalls close member [reason]` | Manage Server | Closes a member's stall. Only staff can reopen it. |
+| `/stalls reopen member` | Manage Server | Reopens a member's stall, including one staff closed. |
+| `/stalls list` | Manage Server | Shows the stalls channel and how many stalls are open and closed. |
 
 To show staff tools to a role without Manage Threads, add it under **Server Settings → Integrations → MarketMule**.
 
@@ -97,21 +101,25 @@ The rating form fits 5 inputs per page, so larger rubrics are split into steps a
 
 ## Stalls
 
-Each member can open **one** stall from the pinned post. The bot posts it under their name, with a shop window message underneath that lists their items and holds the owner's buttons:
+A stall is a member's own post in the stalls channel. They write it however they like (the Start here post has a **Get the template** button with Kaonashi's layout to copy) and edit it whenever their stock changes. The bot handles the rules:
 
-| Button | What it does |
+| What | How |
 | --- | --- |
-| ➕ Add item / ✏️ Edit item / 🗑️ Remove item | Manage listed items. Trade holds are entered as days left and shown as a local date with a countdown. |
-| ✅ Mark sold | Moves an item to Recently Sold (the last 5 are shown). |
-| ⚙️ Edit stall info | Title, links and negotiation status. |
-| 🔼 Bump | Moves the stall to the top. Once every 12 hours. |
-| ⛔ Close stall | Closes it. The owner can reopen it with Reopen stall or Open my stall. |
+| No bumping by comments | Replies are off in the channel, so only the bot posts under stalls. |
+| 🔼 Bump | A button under each stall moves it to the top, once every 12 hours. Editing the post bumps it too, at most every 6 hours. |
+| One stall per member | A second post is removed, and the member is DMed a link to their stall plus a copy of what they wrote. |
+| No bumping by reposting | Deleting a stall (or emptying its post) and posting again, or closing and reopening, can't reach the top sooner than the Bump button would. A repost that's too early is removed with a DM saying when they can post again. |
+| Safe links only | Posts may only link to `csfloat.com` and `steamcommunity.com`. A post with any other link (including look-alikes like `csfloat.com.evil.site`) is removed, on posting or on editing, with a DM explaining why and a copy of the text. |
+| ⛔ Close stall | The owner (or staff) can close a stall; it's locked and hidden with a **Reopen stall** button. Stalls with no edits or bumps for 30 days close by themselves. If staff close a stall, only staff can reopen it. |
+| Tags | 🟢 Open / ⚫ Closed are staff-only tags the bot sets. Any other tags members pick are kept. |
 
-Only the owner and staff can use a stall's buttons. Adding an item or marking one sold also bumps the stall, at most once every 6 hours. Store links must be `https://csfloat.com/...` and trade links `https://steamcommunity.com/tradeoffer/new/...`, which blocks look-alike phishing links. Stalls with no updates for 30 days close automatically. If staff close a stall, only staff can reopen it.
+Only the owner and staff can use a stall's buttons. Deleting a stall post frees its owner to post a new one, once the Bump wait has passed.
 
-**Channel setup:** set @everyone to **Create Posts: off** and **Send Messages in Posts: off**, so only the bot can post in stalls and replies can't bump them. Keep the forum sorted by **Recent Activity**.
+**Channel setup:** for @everyone, **Create Posts: on** and **Send Messages in Posts: off**. `/stalls setup` checks this and sorts the forum by **Recent Activity**, which is what makes bumps work.
 
-Wording, tag names and the limits above (cooldowns, inactive days, recently sold count, longest trade hold) are in `templates/stalls/stalls.json`. Restart the bot after editing it.
+**Message Content Intent:** the bot reads members' posts to check their links, so turn on **Message Content Intent** in the Discord Developer Portal (your app → Bot). Do this *before* deploying: with it off, Discord refuses the bot's connection.
+
+Wording, the template, allowed link sites, tag names and the limits (cooldowns, inactive days) are in `templates/stalls/stalls.json`. Restart the bot after editing it.
 
 ## Icons
 
@@ -125,7 +133,7 @@ Discord's AutoMod doesn't check messages the bot posts through webhooks, so the 
 
 ## Running it
 
-**Discord application:** create one at <https://discord.com/developers/applications>, copy the token from the **Bot** tab, and invite it with the `bot` and `applications.commands` scopes and permissions integer `326954503248`. No privileged intents are needed.
+**Discord application:** create one at <https://discord.com/developers/applications>, copy the token from the **Bot** tab, and invite it with the `bot` and `applications.commands` scopes and permissions integer `326954503248`. Turn on **Message Content Intent** on the **Bot** tab (stalls use it to check links in members' posts).
 
 **On Windows:** run `run.bat`. The first run creates `.env`. Fill in `DISCORD_TOKEN` and `GUILD_ID`, then run it again. Only run one copy per token.
 

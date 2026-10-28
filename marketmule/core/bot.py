@@ -17,7 +17,7 @@ from marketmule.core.wordfilter import WordFilter
 log = logging.getLogger(__name__)
 
 # Features to load at startup. To add one, create marketmule/features/<name>/ and list it here.
-FEATURES: tuple[str, ...] = ("marketmule.features.forums",)
+FEATURES: tuple[str, ...] = ("marketmule.features.forums", "marketmule.features.stalls")
 
 
 class CommandTree(app_commands.CommandTree):
@@ -30,11 +30,21 @@ class CommandTree(app_commands.CommandTree):
             await interaction.response.send_message(message, ephemeral=True)
 
 
+def bot_intents() -> discord.Intents:
+    """Default intents plus message text, which stalls need to check the links in members' posts.
+
+    Message Content is a privileged intent: it must also be switched on in the Discord Developer Portal
+    (your app → Bot → Message Content Intent), or Discord refuses the bot's connection."""
+    intents = discord.Intents.default()
+    intents.message_content = True
+    return intents
+
+
 class MarketMule(commands.Bot):
     def __init__(self, config: Config) -> None:
         super().__init__(
             command_prefix=commands.when_mentioned,
-            intents=discord.Intents.default(),
+            intents=bot_intents(),
             tree_cls=CommandTree,
         )
         self.config = config

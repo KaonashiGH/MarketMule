@@ -1,0 +1,42 @@
+{
+  "panel": {
+    "thread_name": "Start here: Open your stall",
+    "title": "How to open a stall",
+    "text": "Want a permanent shop in the server? Make your own post in this channel and it becomes your stall.\n\n**1.** Press **Get the template** below and copy it.\n**2.** Press **New Post** at the top of this channel. Title it like `[Store] Doppler knives and cheap stickers` or `[Have] Butterfly Fade [Want] Cash`.\n**3.** Paste the template, fill it in, and add screenshots with **+**. Make it your own: change the layout, add items, whatever you like.\n\n**Edit your post any time** to add, change or sell items. Under your stall you get a **Bump** button that moves it to the top once every 12 hours, and editing your post bumps it too (at most every 6 hours).\n\n**Rules:** one stall per member · only CSFloat and Steam links (anything else gets your post removed) · replies are off, so buyers DM the seller · deleting and reposting, or closing and reopening, can't get you to the top sooner than Bump · stalls with no edits or bumps for 30 days close, and you can reopen yours any time.",
+    "button_label": "Get the template"
+  },
+  "banner": "stalls",
+  "icon": "mm_stalls",
+  "color": "#237bff",
+
+  "template": "🏪 **WELCOME TO MY STALL**\n\n🔗 **My CSFloat Store Link:** https://csfloat.com/stall/your-id\n🔗 **Steam Trade Link:** https://steamcommunity.com/tradeoffer/new/?partner=your-trade-link\n💬 **Negotiation Status:** Are prices firm? Do you accept overpay? Any payment you refuse?\n\n🛒 **ITEMS FOR SALE**\n**Item 1:** Weapon | Skin (Wear - Float)\n**Buyout (B/O):** $00.00 CSFloat balance, or a specific item\n**Status:** Tradable now / Trade hold until Nov 2\n\n**Item 2:** Weapon | Skin (Wear - Float)\n**Buyout (B/O):** $00.00 CSFloat balance\n**Status:** Tradable now\n\n❌ **RECENTLY SOLD**\n~~Weapon | Skin~~",
+  "template_intro": "Copy this into a new post in the stalls channel, then fill it in. Keep or change anything you like. A buyout is the exact price or item you'll accept right away, so \"taking offers\" isn't one.",
+
+  "control": {
+    "text": "-# Stall of {owner} · last bumped {bumped}",
+    "owner_hint": "-# Owner: **Bump** moves your stall to the top (every {manual_hours} hours). Editing your post bumps it too (at most every {edit_hours} hours).",
+    "bump_button": "Bump",
+    "close_button": "Close stall",
+    "reopen_button": "Reopen stall",
+    "closed_text": "⚫ **This stall is closed.** {reason}"
+  },
+
+  "removed": {
+    "duplicate": "You already have a stall: {link}\nEdit that post instead, or reopen it if it's closed.",
+    "bad_link": "It has a link that isn't allowed: {links}\nOnly CSFloat and Steam links are allowed in stalls, to keep everyone safe from scam links.",
+    "too_soon": "Your last stall was removed or deleted recently. You can post a new one {when}: a new post moves you to the top, so it waits as long as the Bump button ({hours} hours).",
+    "intro": "Your post **{title}** in {channel} was removed. {reason}",
+    "copy": "Here's what you wrote, so you can fix it and post again:"
+  },
+
+  "allowed_link_hosts": ["csfloat.com", "steamcommunity.com"],
+
+  "tags": {"open": "Open", "closed": "Closed"},
+  "tag_emojis": {"Open": "🟢", "Closed": "⚫"},
+
+  "limits": {
+    "manual_bump_hours": 12,
+    "edit_bump_hours": 6,
+    "inactive_days": 30
+  }
+}
