@@ -22,7 +22,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands, tasks
 
-from marketmule.core.discord_utils import FORUM_ONLY, fetch_thread, set_option
+from marketmule.core.discord_utils import fetch_thread
 
 from . import service
 from .render import bad_links, is_inactive
@@ -66,8 +66,6 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
         self.ctx = ctx
         self._seen_edits: dict[int, str] = {}  # thread → last edit time seen, to ignore repeated edit events
         super().__init__()
-        for command in ("setup", "remove"):
-            set_option(self, command, "channel", channel_types=FORUM_ONLY)
 
     async def cog_load(self) -> None:
         if not self._can_read_text():
@@ -83,9 +81,21 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
 
     # Commands
 
-    @app_commands.command(description="Make a forum channel the stalls channel and post its Start here post")
-    @app_commands.describe(channel="Forum channel for stalls. Run again to refresh the Start here post.")
-    async def setup(self, interaction: discord.Interaction, channel: discord.ForumChannel) -> None:
+    # Setup lives in /forums setup (pick "Stalls" as the template), so every forum channel is set up the same way.
+    # /forums finds this cog by name ("Stalls") and calls these methods: the two features don't import each other.
+
+    async def is_stalls_channel(self, channel_id: int) -> bool:
+        return await self.ctx.storage.get_channel(channel_id) is not None
+
+    async def list_lines(self, guild_id: int) -> list[str]:
+        lines = []
+        for channel in await self.ctx.storage.list_channels(guild_id):
+            open_count, closed_count = await self.ctx.storage.count_stalls(channel.channel_id)
+            lines.append(f"<#{channel.channel_id}> → **Stalls** ({open_count} open, {closed_count} closed)")
+        return lines
+
+    async def setup_channel(self, interaction: discord.Interaction, channel: discord.ForumChannel) -> None:
+        """Make a forum the stalls channel: tags, sort order, and the pinned Start here post."""
         guild = interaction.guild
         if guild is None:
             return
@@ -156,9 +166,8 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
             lines.append("Channel permissions look right: members can create posts but not reply.")
         await interaction.followup.send("\n".join(lines), ephemeral=True)
 
-    @app_commands.command(description="Stop using a forum channel for stalls. Existing posts stay.")
-    @app_commands.describe(channel="The stalls channel")
-    async def remove(self, interaction: discord.Interaction, channel: discord.ForumChannel) -> None:
+    async def remove_channel(self, interaction: discord.Interaction, channel: discord.ForumChannel) -> None:
+        """Stop using a forum for stalls. Existing posts stay."""
         guild = interaction.guild
         previous = await self.ctx.storage.get_channel(channel.id)
         if guild is None or previous is None:

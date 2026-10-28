@@ -205,7 +205,6 @@ def test_buttons_survive_restarts() -> None:
 def test_commands() -> None:
     cog = Stalls(CTX)
     assert cog.__cog_group_name__ == "stalls"
-    assert {c.name for c in cog.walk_app_commands()} == {"setup", "remove", "close", "reopen", "list"}
-    for name in ("setup", "remove"):
-        command = next(c for c in cog.walk_app_commands() if c.name == name)
-        assert command._params["channel"].to_dict()["channel_types"] == [discord.ChannelType.forum.value]
+    # Setup and removal are in /forums setup and /forums remove (pick "Stalls"); /stalls keeps the staff tools.
+    assert {c.name for c in cog.walk_app_commands()} == {"close", "reopen", "list"}
+    assert hasattr(cog, "setup_channel") and hasattr(cog, "remove_channel")

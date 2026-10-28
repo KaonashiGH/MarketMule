@@ -29,8 +29,8 @@ Rules: `core/` never imports from `features/`, and features never import from ea
 
 | Command | Who | What it does |
 | --- | --- | --- |
-| `/forums setup channel form` | Manage Server | Adds a form to a forum channel and rebuilds its pinned post. Run it again with another form to add a second one. |
-| `/forums remove channel [form]` | Manage Server | Removes one form, or every form if none is picked. Existing posts stay. |
+| `/forums setup channel form` | Manage Server | Adds a form to a forum channel and rebuilds its pinned post. Run it again with another form to add a second one. Pick **Stalls** to make the channel the stalls channel instead. |
+| `/forums remove channel [form]` | Manage Server | Removes one form, or every form if none is picked (or Stalls, for the stalls channel). Existing posts stay. |
 | `/forums list` | Manage Server | Shows which channels offer which forms. |
 | `/marketmule staffrole role` | Manage Server | Sets the staff role for every feature. |
 | `/marketmule icons` | Manage Server | Uploads the icons in `assets/icons/` as the bot's own emojis. Safe to run again: it only adds missing ones. |
@@ -39,8 +39,6 @@ Rules: `core/` never imports from `features/`, and features never import from ea
 | `/leaderboard form` | Everyone | Shows the top-rated posts for a form that has a rating rubric. |
 | **Apps → Remove rating** | Staff | On a rating: deletes it and takes its score out of the average and leaderboard. |
 | `/ratings block member [reason]` | Staff | Stops a member from rating. `/ratings unblock` undoes it, `/ratings blocked` lists them. |
-| `/stalls setup channel` | Manage Server | Makes a forum the stalls channel and pins its Start here post. Run again to refresh it. |
-| `/stalls remove channel` | Manage Server | Stops using a forum for stalls. Existing posts stay. |
 | `/stalls close member [reason]` | Manage Server | Closes a member's stall. Only staff can reopen it. |
 | `/stalls reopen member` | Manage Server | Reopens a member's stall, including one staff closed. |
 | `/stalls list` | Manage Server | Shows the stalls channel and how many stalls are open and closed. |
@@ -115,7 +113,7 @@ A stall is a member's own post in the stalls channel. They write it however they
 
 Only the owner and staff can use a stall's buttons. Deleting a stall post frees its owner to post a new one, once the Bump wait has passed.
 
-**Channel setup:** for @everyone, **Create Posts: on** and **Send Messages in Posts: off**. `/stalls setup` checks this and sorts the forum by **Recent Activity**, which is what makes bumps work.
+**Channel setup:** for @everyone, **Create Posts: on** and **Send Messages in Posts: off**. Set it up with `/forums setup` and pick **Stalls** as the form. That checks these permissions and sorts the forum by **Recent Activity**, which is what makes bumps work. A channel is either a forms channel or the stalls channel, not both.
 
 **Message Content Intent:** the bot reads members' posts to check their links, so turn on **Message Content Intent** in the Discord Developer Portal (your app → Bot). Do this *before* deploying: with it off, Discord refuses the bot's connection.
 
