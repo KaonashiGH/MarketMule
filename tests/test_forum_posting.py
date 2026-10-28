@@ -69,7 +69,7 @@ def test_feature_request_reads_like_a_post() -> None:
     )
     title, body = body_of(submission)
 
-    assert title == "[🔵 Under review] - Trading · Bulk accept trades"
+    assert title == "[🔵 Proposed] - Trading · Bulk accept trades"
     assert body == (  # text style, like the price check
         "## 💡 Bulk accept trades\n-# Feature request · Trading · Website · Suggested by @someone · IDEA-0007\n"
         "### Description\n> Add a button to accept all pending trades.\n"
@@ -273,7 +273,7 @@ def test_bug_and_feature_titles_show_the_status_and_follow_it() -> None:
     assert retitle(title, bug.template, "Open", "Fixed") == "[🟢 Fixed] - Marketplace · Floats overlap names"
     idea = make_submission("feature_request", {"area": ["Trading"]}, summary="Bulk accept")
     title, _ = body_of(idea)
-    assert retitle(title, idea.template, "Under review", "Planned") == "[🟣 Planned] - Trading · Bulk accept"
+    assert retitle(title, idea.template, "Proposed", "Planned") == "[🟣 Planned] - Trading · Bulk accept"
 
 
 def test_titles_are_never_cut_off() -> None:
