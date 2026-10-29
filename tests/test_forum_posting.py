@@ -167,8 +167,12 @@ def test_price_check_card_uses_headers_and_quotes() -> None:
 
 
 def test_card_link_button_only_for_real_links() -> None:
-    _, children = card_texts(price_check(link="not a link"))
-    assert not any(isinstance(c, ui.ActionRow) for c in children)
+    for typed in ("not a link", "test", "https://test", "loadout lab", "https://", "http://csfloat"):
+        _, children = card_texts(price_check(link=typed))
+        assert not any(isinstance(c, ui.ActionRow) for c in children), typed
+    for typed in ("csfloat.com/item/1", "https://www.csfloat.com/db?x=1", "HTTPS://Steamcommunity.com/id/me"):
+        _, children = card_texts(price_check(link=typed))
+        assert any(isinstance(c, ui.ActionRow) for c in children), typed
 
 
 def test_card_uses_uploaded_icons() -> None:

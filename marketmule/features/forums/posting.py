@@ -241,9 +241,15 @@ def _link_button(template: Template, answers: dict[str, str]) -> ui.Button | Non
     url = answers[template.link_button.key].strip().strip("<>")
     if url and not url.lower().startswith(("http://", "https://")):
         url = "https://" + url  # e.g. steamcommunity.com/id/name still gets its button
-    if not re.fullmatch(r"https?://\S+", url) or len(url) > 512:
-        return None  # if not a usable link
+    if not is_web_link(url) or len(url) > 512:
+        return None  # not a usable link (Discord rejects the whole post if a button's link is bad)
     return ui.Button(label=template.link_button.label, url=url, style=discord.ButtonStyle.link)
+
+
+def is_web_link(url: str) -> bool:
+    """A real web address: http(s), then a site name with a dot (csfloat.com), then anything without spaces."""
+    match = re.fullmatch(r"https?://([^/?#\s:@]+)(:\d{1,5})?([/?#]\S*)?", url, re.IGNORECASE)
+    return bool(match and re.fullmatch(r"([a-z0-9-]+\.)+[a-z]{2,}", match.group(1), re.IGNORECASE))
 
 
 def _is_image(filename: str) -> bool:
