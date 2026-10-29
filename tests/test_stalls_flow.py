@@ -34,11 +34,15 @@ def not_found() -> discord.NotFound:
 
 
 class FakeAttachment:
-    def __init__(self, filename: str) -> None:
-        self.filename = filename
+    def __init__(self, filename: str, description: str | None = None) -> None:
+        self.filename, self.description = filename, description
 
-    async def to_file(self) -> Any:
-        return SimpleNamespace(filename=self.filename)
+    async def to_file(self, filename: Any = None, description: Any = None) -> Any:
+        return SimpleNamespace(filename=filename or self.filename, description=description or self.description)
+
+
+def bad_request() -> discord.HTTPException:
+    return discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request"), "Invalid Form Body")  # type: ignore[arg-type]
 
 
 class FakeMessage:
@@ -46,22 +50,45 @@ class FakeMessage:
         self.thread, self.id, self.content, self.view = thread, message_id, content, view
         self.attachments: list[FakeAttachment] = []
         self.previews_hidden = False
-        self.flags = SimpleNamespace(suppress_embeds=False)
+        self.refuse_new_layout = False  # like an old-style message Discord won't switch to the new layout
+        self.flags = SimpleNamespace(suppress_embeds=False, components_v2=isinstance(view, discord.ui.LayoutView))
 
     async def edit(self, **changes: Any) -> None:
         if self.id not in self.thread.messages and self.id != self.thread.id:
             raise not_found()
+        new_layout = isinstance(changes.get("view"), discord.ui.LayoutView)
+        if self.flags.components_v2 and "content" in changes:
+            raise bad_request()  # the new layout can't have plain text
+        if new_layout and not self.flags.components_v2 and self.refuse_new_layout:
+            raise bad_request()
         self.content = changes.get("content", self.content)
         if "view" in changes:
             self.view = changes["view"]
+            self.flags.components_v2 = self.flags.components_v2 or new_layout
         if "attachments" in changes:
-            self.attachments = [FakeAttachment(f.filename) for f in changes["attachments"]]
+            self.attachments = [FakeAttachment(f.filename, f.description) for f in changes["attachments"]]
         if changes.get("suppress"):
             self.previews_hidden = self.flags.suppress_embeds = True
 
     @property
     def pictures(self) -> list[str]:
         return [a.filename for a in self.attachments]
+
+    @property
+    def text(self) -> str:
+        """Everything the message shows as text: its content, or the text in its layout."""
+        if not isinstance(self.view, discord.ui.LayoutView):
+            return self.content or ""
+        shown = [c.content for c in self.view.walk_children() if isinstance(c, discord.ui.TextDisplay)]
+        return "\n".join(shown)
+
+    @property
+    def buttons(self) -> list[str]:
+        return [c.label for c in self.view.walk_children() if isinstance(c, discord.ui.Button)]
+
+    @property
+    def thumbnails(self) -> list[str]:
+        return [c.media.url for c in self.view.walk_children() if isinstance(c, discord.ui.Thumbnail)]
 
     async def delete(self) -> None:
         if self.thread.messages.pop(self.id, None) is None:
@@ -94,9 +121,9 @@ class FakeThread:
         self.jump_url = f"https://discord.com/channels/1/{self.id}"
         forum.threads_by_id[self.id] = self
 
-    async def send(self, content: str, **kwargs: Any) -> FakeMessage:
-        message = FakeMessage(self, self.parent.next_id(), content, kwargs.get("view"))
-        message.attachments = [FakeAttachment(f.filename) for f in kwargs.get("files", [])]
+    async def send(self, content: str | None = None, **kwargs: Any) -> FakeMessage:
+        message = FakeMessage(self, self.parent.next_id(), content or "", kwargs.get("view"))
+        message.attachments = [FakeAttachment(f.filename, f.description) for f in kwargs.get("files", [])]
         self.messages[message.id] = message
         return message
 
@@ -233,7 +260,9 @@ def test_a_stall_from_post_to_reopen(world: Any) -> None:
         stall = await fresh(thread)
         assert stall.status == OPEN and stall.owner_id == 100
         assert thread.tag_names == ["Open", "Knives"]  # their own tag is kept
-        assert thread.control.content.startswith("-# Stall of <@100> · last bumped <t:")
+        assert thread.control.text.startswith("-# Stall of <@100> · last bumped <t:")
+        assert thread.control.flags.components_v2 and thread.control.content == ""
+        assert thread.control.buttons == ["Bump", "Add picture", "Close stall"]  # no pictures yet, so no Remove
         assert isinstance(thread.control.view, ControlView)
 
         # An edit right away doesn't bump (the 6 hour cooldown) but counts as activity.
@@ -257,7 +286,8 @@ def test_a_stall_from_post_to_reopen(world: Any) -> None:
 
         # Close: the buttons become a note and a Reopen button, then the post is tagged, locked and hidden.
         await service.close_stall(ctx, await fresh(thread), "The owner closed it and can reopen it any time.")
-        assert thread.control.content.startswith("⚫ **This stall is closed.** The owner closed it")
+        assert thread.control.text.startswith("⚫ **This stall is closed.** The owner closed it")
+        assert thread.control.buttons == ["Reopen stall"]
         assert isinstance(thread.control.view, ReopenView)
         assert thread.locked and thread.archived and thread.tag_names == ["Closed", "Knives"]
         assert (await fresh(thread)).status == CLOSED
@@ -336,7 +366,7 @@ def test_upkeep_closes_quiet_stalls_unhides_open_ones_and_forgets_deleted(world:
         await events.upkeep.coro(events)
 
         assert (await storage.get_stall(quiet.id)).status == CLOSED  # type: ignore[union-attr]
-        assert "No edits or bumps for 30 days" in quiet.control.content and quiet.archived
+        assert "No edits or bumps for 30 days" in quiet.control.text and quiet.archived
         assert not hidden.archived and (await storage.get_stall(hidden.id)).status == OPEN  # type: ignore[union-attr]
         assert (await storage.get_stall(gone.id)).is_deleted  # type: ignore[union-attr]  # owner can post again later
 
@@ -388,25 +418,96 @@ def test_link_previews_are_hidden_and_pictures_go_under_the_stall(world: Any) ->
         await events.on_raw_message_edit(edit_event(thread, GOOD_POST + " https://csfloat.com/item/2", "t1"))
         assert thread.starter_message.previews_hidden  # hidden again after an edit (if Discord showed them again)
 
-        # Pictures: added to the bot's message under the post, in place (soon after a bump, so no new bump).
-        stall = await storage.get_stall(thread.id)
+    run(world, body)
+
+
+def test_pictures_are_rows_with_descriptions_and_come_off_one_at_a_time(world: Any) -> None:
+    async def body(ctx: StallContext, storage: StallStorage, db: Database) -> None:
+        events = Stalls(ctx)
+        thread = FakeThread(world.forum, 100, "[Store] Knives", GOOD_POST)
+        await events.on_thread_create(thread)
+
+        async def stall() -> Any:
+            return await storage.get_stall(thread.id)
+
+        # Each picture is added in place (soon after a bump, so no new bump), as its own row with its description.
         before = thread.control.id
-        count = await service.set_pictures(ctx, stall, [FakeAttachment("ak.png"), FakeAttachment("gloves.jpg")])  # type: ignore[arg-type,list-item]
-        assert count == 2 and thread.control.id == before
-        assert thread.control.pictures == ["1-ak.png", "2-gloves.jpg"]
+        assert (
+            await service.add_picture(ctx, await stall(), FakeAttachment("AK Redline.PNG"), "AK-47 | Redline  FT · $25")
+            == 1
+        )  # type: ignore[arg-type]
+        assert await service.add_picture(ctx, await stall(), FakeAttachment("gloves.jpg"), "") == 2  # type: ignore[arg-type]
+        control = thread.control
+        assert control.id == before and control.pictures == ["pic1.png", "pic2.jpg"]
+        assert control.thumbnails == ["attachment://pic1.png", "attachment://pic2.jpg"]
+        assert "**1.** AK-47 | Redline FT · $25\n**2.** Picture" in control.text  # no description: "Picture"
+        assert control.buttons == ["Bump", "Add picture", "Remove picture", "Close stall"]
+        assert [p.description for p in await service.stall_pictures(ctx, await stall())] == [
+            "AK-47 | Redline FT · $25",
+            "",
+        ]
 
-        # A bump posts the buttons again, and the pictures come along.
+        # A bump posts the message again; the pictures and descriptions come along.
         await turn_back_bump_clock(db, 13)
-        assert await service.bump(ctx, await storage.get_stall(thread.id), hours=12) == 0  # type: ignore[arg-type]
-        assert thread.control.id > before and thread.control.pictures == ["1-ak.png", "2-gloves.jpg"]
+        assert await service.bump(ctx, await stall(), hours=12) == 0
+        assert thread.control.id > before and thread.control.pictures == ["pic1.png", "pic2.jpg"]
+        assert "**1.** AK-47 | Redline FT · $25" in thread.control.text
 
-        # Only pictures, at most 10; uploading nothing removes them.
+        # Removing one leaves the other as it is; numbering follows the order.
+        assert await service.remove_pictures(ctx, await stall(), ["pic1.png"]) == 1
+        assert thread.control.pictures == ["pic2.jpg"] and "**1.** Picture" in thread.control.text
+        # A new picture gets a name that's free.
+        await service.add_picture(ctx, await stall(), FakeAttachment("x.webp"), "Sticker")  # type: ignore[arg-type]
+        assert thread.control.pictures == ["pic2.jpg", "pic1.webp"]
+
+        # Closing keeps the pictures (shown on the closed note); reopening brings the buttons back with them.
+        await service.close_stall(ctx, await stall(), "Closed.")
+        assert thread.control.pictures == ["pic2.jpg", "pic1.webp"] and len(thread.control.thumbnails) == 2
+        await service.reopen_stall(ctx, await stall())
+        assert len(thread.control.thumbnails) == 2 and "Remove picture" in thread.control.buttons
+
+        # Only pictures; no links outside CSFloat and Steam in descriptions; at most 10 (then no Add button).
         with pytest.raises(service.StallError, match="Only pictures"):
-            await service.set_pictures(ctx, stall, [FakeAttachment("notes.pdf")])  # type: ignore[arg-type,list-item]
-        with pytest.raises(service.StallError, match="up to 10"):
-            await service.set_pictures(ctx, stall, [FakeAttachment(f"{n}.png") for n in range(11)])  # type: ignore[arg-type,misc]
-        assert await service.set_pictures(ctx, await storage.get_stall(thread.id), []) == 0  # type: ignore[arg-type]
-        assert thread.control.pictures == []
+            await service.add_picture(ctx, await stall(), FakeAttachment("notes.pdf"), "")  # type: ignore[arg-type]
+        with pytest.raises(service.StallError, match="link that isn't allowed"):
+            await service.add_picture(ctx, await stall(), FakeAttachment("a.png"), "buy at https://evil.site")  # type: ignore[arg-type]
+        for n in range(8):
+            await service.add_picture(ctx, await stall(), FakeAttachment(f"{n}.png"), f"Item {n}")  # type: ignore[arg-type]
+        assert len(thread.control.pictures) == 10 and "Add picture" not in thread.control.buttons
+        with pytest.raises(service.StallError, match="already shows 10"):
+            await service.add_picture(ctx, await stall(), FakeAttachment("11.png"), "")  # type: ignore[arg-type]
+
+    run(world, body)
+
+
+def test_old_control_messages_switch_to_the_new_layout(world: Any) -> None:
+    async def body(ctx: StallContext, storage: StallStorage, db: Database) -> None:
+        events = Stalls(ctx)
+
+        async def old_style(thread: FakeThread, *, refuse: bool) -> FakeMessage:
+            """What a stall's message looked like before picture rows: text, buttons, plain pictures."""
+            await events.on_thread_create(thread)
+            message = thread.control
+            message.view, message.content = None, "-# Stall of <@100> · last bumped <t:1:R>"
+            message.flags.components_v2 = False
+            message.attachments = [FakeAttachment("1-ak.png")]
+            message.refuse_new_layout = refuse
+            return message
+
+        # If Discord lets the message switch by editing, it changes in place.
+        first = FakeThread(world.forum, 100, "[Store] One", GOOD_POST)
+        message = await old_style(first, refuse=False)
+        await service.add_picture(ctx, await storage.get_stall(first.id), FakeAttachment("b.png"), "Gloves")  # type: ignore[arg-type]
+        assert first.control is message and message.flags.components_v2 and message.content is None
+        assert message.pictures == ["1-ak.png", "pic1.png"] and "**2.** Gloves" in message.text
+
+        # If it refuses, a new message is posted with the old pictures and the new one.
+        second = FakeThread(world.forum, 200, "[Store] Two", GOOD_POST)
+        message = await old_style(second, refuse=True)
+        await service.add_picture(ctx, await storage.get_stall(second.id), FakeAttachment("b.png"), "Gloves")  # type: ignore[arg-type]
+        assert second.control is not message and second.control.flags.components_v2
+        assert second.control.pictures == ["1-ak.png", "pic1.png"]
+        assert (await storage.get_stall(second.id)).control_message_id == second.control.id  # type: ignore[union-attr]
 
     run(world, body)
 

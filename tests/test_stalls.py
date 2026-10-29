@@ -30,12 +30,15 @@ from marketmule.features.stalls.render import (
 from marketmule.features.stalls.settings import SettingsError, load_settings, validate
 from marketmule.features.stalls.storage import CLOSED, Stall, StallStorage
 from marketmule.features.stalls.views import (
+    ADD_PICTURE_BUTTON_ID,
     BUMP_BUTTON_ID,
     CLOSE_BUTTON_ID,
-    PICTURES_BUTTON_ID,
+    OLD_PICTURES_BUTTON_ID,
+    REMOVE_PICTURE_BUTTON_ID,
     REOPEN_BUTTON_ID,
     TEMPLATE_BUTTON_ID,
     ControlView,
+    OldPicturesButton,
     ReopenView,
     StallPanel,
 )
@@ -196,12 +199,20 @@ CTX = cast(Any, SimpleNamespace(bot=None, settings=SETTINGS))
 
 def test_buttons_survive_restarts() -> None:
     async def build() -> list[Any]:
-        return [StallPanel(CTX), ControlView(CTX), ReopenView(CTX)]
+        return [StallPanel(CTX), ControlView(CTX), ReopenView(CTX), OldPicturesButton(CTX)]
 
     views = asyncio.run(build())
     assert all(view.is_persistent() for view in views)
     ids = [c.custom_id for v in views for c in v.walk_children() if isinstance(c, discord.ui.Button)]
-    assert ids == [TEMPLATE_BUTTON_ID, BUMP_BUTTON_ID, PICTURES_BUTTON_ID, CLOSE_BUTTON_ID, REOPEN_BUTTON_ID]
+    assert ids == [
+        TEMPLATE_BUTTON_ID,
+        BUMP_BUTTON_ID,
+        ADD_PICTURE_BUTTON_ID,
+        REMOVE_PICTURE_BUTTON_ID,
+        CLOSE_BUTTON_ID,
+        REOPEN_BUTTON_ID,
+        OLD_PICTURES_BUTTON_ID,
+    ]
 
 
 def test_commands() -> None:

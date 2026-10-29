@@ -9,6 +9,8 @@ message, so that moves the stall to the top. Members can't reply in stalls, so n
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
+from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from .settings import StallSettings
@@ -78,6 +80,30 @@ def control_text(settings: StallSettings, stall: Stall) -> str:
         )
         lines.append(hint)
     return "\n".join(lines)
+
+
+@dataclass(frozen=True)
+class Picture:
+    """A picture under a stall: the file on the bot's message, and the owner's description of it."""
+
+    filename: str
+    description: str = ""
+
+
+def picture_caption(settings: StallSettings, number: int, description: str) -> str:
+    return settings.control.picture_caption.format(
+        number=number, description=description.strip() or settings.control.no_description
+    )
+
+
+def picture_name(taken: Iterable[str], original: str) -> str:
+    """A short, unique file name for a new picture (pic1.png, pic2.jpg, ...). The layout refers to it by name."""
+    taken = set(taken)
+    extension = original.rsplit(".", 1)[-1].lower() if "." in original else "png"
+    number = 1
+    while any(name.startswith(f"pic{number}.") for name in taken):
+        number += 1
+    return f"pic{number}.{extension}"
 
 
 def closed_text(settings: StallSettings, reason: str) -> str:

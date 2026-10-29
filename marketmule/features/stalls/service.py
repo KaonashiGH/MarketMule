@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING
 
 import discord
@@ -11,11 +12,16 @@ import discord
 from marketmule.core.discord_utils import fetch_thread
 from marketmule.core.staff import is_staff
 
-from .render import bad_links, closed_text, control_text, hours_text, removal_message, wait_left
+from .render import Picture, bad_links, closed_text, hours_text, picture_name, removal_message, wait_left
 from .storage import CLOSED, DELETED, OPEN, Stall, StallChannel, now
 
 if TYPE_CHECKING:
+    from discord import ui
+
     from .context import StallContext
+
+    Layout = Callable[[list[Picture]], ui.LayoutView]  # builds the control message for a set of pictures
+    NewPicture = tuple[discord.Attachment, str, str]  # an upload, its file name under the stall, its description
 
 log = logging.getLogger(__name__)
 
@@ -23,6 +29,7 @@ NO_MENTIONS = discord.AllowedMentions.none()
 PICTURE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 WEEK_IN_MINUTES = 10080  # the longest Discord waits before hiding a quiet post; the bot unhides open stalls anyway
 MAX_POST_TAGS = 5
+MISSING_BUTTONS = "This stall's buttons are missing. Press Bump to bring them back, then try again."
 
 
 EXEMPT_SETTING = "stalls_staff_exempt"  # per server, in the shared settings table: "1" (default) or "0"
@@ -180,11 +187,48 @@ async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall)
     The stall's pictures live on this message, so they're copied across to the new one."""
     from .views import ControlView  # the views use this module, so import here
 
+    message = await _control_message(thread, stall)
+    files = await _copy_files(thread, message.attachments) if message else []
+    await _send_control(thread, stall, lambda pictures: ControlView(ctx, stall, pictures), files)
+
+
+async def _control_message(thread: discord.Thread, stall: Stall) -> discord.Message | None:
+    """The bot's message under the stall, or None if it's gone."""
+    if stall.control_message_id is None:
+        return None
+    try:
+        return await thread.fetch_message(stall.control_message_id)
+    except discord.NotFound:
+        return None
+    except discord.HTTPException:
+        log.warning("Couldn't load the control message in %s", thread.name)
+        return None
+
+
+def _pictures(attachments: Sequence[discord.Attachment | discord.File]) -> list[Picture]:
+    return [Picture(a.filename, a.description or "") for a in attachments]
+
+
+async def _copy_files(thread: discord.Thread, attachments: Sequence[discord.Attachment]) -> list[discord.File]:
+    """The pictures on a message, ready to post again (same file names and descriptions)."""
+    files = []
+    for attachment in attachments:
+        try:
+            files.append(await attachment.to_file())
+        except discord.HTTPException:
+            log.warning("Couldn't copy a picture in %s", thread.name)
+    return files
+
+
+async def _new_file(new: NewPicture) -> discord.File:
+    attachment, filename, description = new
+    return await attachment.to_file(filename=filename, description=description or None)
+
+
+async def _send_control(thread: discord.Thread, stall: Stall, layout: Layout, files: list[discord.File]) -> None:
+    """Post a new control message with these pictures, then delete the old one."""
     old = stall.control_message_id
-    pictures = await _pictures_of(thread, old)
-    sent = await thread.send(
-        control_text(ctx.settings, stall), view=ControlView(ctx), files=pictures, allowed_mentions=NO_MENTIONS
-    )
+    sent = await thread.send(view=layout(_pictures(files)), files=files, allowed_mentions=NO_MENTIONS)
     stall.control_message_id = sent.id
     if old and old != sent.id:
         try:
@@ -195,54 +239,93 @@ async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall)
             log.warning("Couldn't delete the old control message in %s", thread.name)
 
 
-async def _pictures_of(thread: discord.Thread, message_id: int | None) -> list[discord.File]:
-    """The pictures on a control message, ready to post again. Empty if it has none or is gone."""
-    if message_id is None:
-        return []
+async def _edit_control(
+    thread: discord.Thread,
+    stall: Stall,
+    layout: Layout,
+    message: discord.Message,
+    keep: Sequence[discord.Attachment],
+    new: Sequence[NewPicture] = (),
+) -> None:
+    """Change the control message where it is (it doesn't move up), keeping some pictures and adding new ones.
+
+    Control messages from before picture rows can't always switch to the new layout by editing, so if
+    Discord refuses, the message is posted again instead (once per stall)."""
+    old_style = not message.flags.components_v2
+    files = [await _new_file(picture) for picture in new]
+    extra = {"content": None} if old_style else {}  # the new layout can't have plain message text
     try:
-        message = await thread.fetch_message(message_id)
+        await message.edit(
+            view=layout(_pictures([*keep, *files])), attachments=[*keep, *files], allowed_mentions=NO_MENTIONS, **extra
+        )
+        return
+    except discord.NotFound:
+        raise
     except discord.HTTPException:
-        return []
-    files = []
-    for attachment in message.attachments:
-        try:
-            files.append(await attachment.to_file())
-        except discord.HTTPException:
-            log.warning("Couldn't copy a picture in %s", thread.name)
-    return files
+        if not old_style:
+            raise
+        log.info("Posting a new control message in %s (old layout couldn't be edited)", thread.name)
+    files = await _copy_files(thread, keep) + [
+        await _new_file(picture) for picture in new
+    ]  # the first try used them up
+    await _send_control(thread, stall, layout, files)
 
 
-async def set_pictures(
-    ctx: StallContext, stall: Stall, attachments: list[discord.Attachment], *, exempt: bool = False
+async def stall_pictures(ctx: StallContext, stall: Stall) -> list[Picture]:
+    """The pictures under a stall, in order."""
+    message = await _control_message(await _thread(ctx, stall), stall)
+    return _pictures(message.attachments) if message else []
+
+
+async def add_picture(
+    ctx: StallContext, stall: Stall, attachment: discord.Attachment, description: str, *, exempt: bool = False
 ) -> int:
-    """Replace the pictures under the stall (on the control message). An empty list removes them.
+    """Add one picture, with the owner's description, as a new row under the stall. Returns how many it shows.
 
-    Discord doesn't let anyone add pictures to a message by editing it, so this is how owners add them later.
-    It counts as an edit: activity, and a bump if the edit cooldown allows. Returns how many are shown."""
-    limit = ctx.settings.limits.max_pictures
-    if any(a.filename.lower().rsplit(".", 1)[-1] not in PICTURE_TYPES for a in attachments):
+    Discord doesn't let anyone add pictures to a post by editing it, so they go on the bot's message.
+    It counts as an edit: activity, and a bump if the edit wait allows."""
+    from .views import ControlView
+
+    if attachment.filename.lower().rsplit(".", 1)[-1] not in PICTURE_TYPES:
         raise StallError("Only pictures can be added (PNG, JPG, GIF or WEBP).")
-    if len(attachments) > limit:
-        raise StallError(f"A stall can show up to {limit} pictures.")
-    files = []
-    for index, attachment in enumerate(attachments, start=1):
-        file = await attachment.to_file()
-        file.filename = f"{index}-{file.filename}"
-        files.append(file)
+    description = " ".join(description.split())
+    links = bad_links(description, ctx.settings.allowed_link_hosts)
+    if links:
+        raise StallError(f"The description has a link that isn't allowed: <{links[0]}>")
+    limit = ctx.settings.limits.max_pictures
     async with ctx.lock(stall.thread_id):
-        thread = await _thread(ctx, stall)
-        if thread.archived:
-            thread = await thread.edit(archived=False)
-        try:
-            if stall.control_message_id is None:
-                raise StallError("This stall's buttons are missing. Press Bump to bring them back, then try again.")
-            await thread.get_partial_message(stall.control_message_id).edit(attachments=files)
-        except discord.NotFound:
-            raise StallError(
-                "This stall's buttons are missing. Press Bump to bring them back, then try again."
-            ) from None
+        thread = await _unarchived(ctx, stall)
+        message = await _control_message(thread, stall)
+        if message is None:
+            raise StallError(MISSING_BUTTONS)
+        if len(message.attachments) >= limit:
+            raise StallError(f"Your stall already shows {limit} pictures. Remove one first.")
+        keep = list(message.attachments)
+        count = len(keep) + 1
+        name = picture_name([a.filename for a in message.attachments], attachment.filename)
+        layout: Layout = lambda pictures: ControlView(ctx, stall, pictures)  # noqa: E731
+        await _edit_control(thread, stall, layout, message, keep, [(attachment, name, description)])
+        await ctx.storage.save_stall(stall)
     await post_edited(ctx, stall, exempt=exempt)
-    return len(files)
+    return count
+
+
+async def remove_pictures(ctx: StallContext, stall: Stall, filenames: Sequence[str], *, exempt: bool = False) -> int:
+    """Take the chosen pictures off the stall; the rest stay as they are. Returns how many are left."""
+    from .views import ControlView
+
+    async with ctx.lock(stall.thread_id):
+        thread = await _unarchived(ctx, stall)
+        message = await _control_message(thread, stall)
+        if message is None:
+            raise StallError(MISSING_BUTTONS)
+        keep = [a for a in message.attachments if a.filename not in set(filenames)]
+        if len(keep) != len(message.attachments):
+            layout: Layout = lambda pictures: ControlView(ctx, stall, pictures)  # noqa: E731
+            await _edit_control(thread, stall, layout, message, keep)
+            await ctx.storage.save_stall(stall)
+    await post_edited(ctx, stall, exempt=exempt)
+    return len(keep)
 
 
 async def hide_link_previews(thread: discord.Thread) -> None:
@@ -270,18 +353,8 @@ async def close_stall(ctx: StallContext, stall: Stall, reason: str, *, by_staff:
         if thread.archived:
             thread = await thread.edit(archived=False)
         text = closed_text(ctx.settings, reason)
-        edited = False
-        if stall.control_message_id is not None:
-            try:
-                await thread.get_partial_message(stall.control_message_id).edit(
-                    content=text, view=ReopenView(ctx), allowed_mentions=NO_MENTIONS
-                )
-                edited = True
-            except discord.NotFound:
-                pass  # deleted by hand: post a new one below
-        if not edited:
-            sent = await thread.send(text, view=ReopenView(ctx), allowed_mentions=NO_MENTIONS)
-            stall.control_message_id = sent.id
+        layout: Layout = lambda pictures: ReopenView(ctx, text, pictures)  # noqa: E731
+        await _show(thread, stall, layout)
         await _set_status_tag(ctx, thread, CLOSED)
         stall.status = CLOSED
         stall.closed_by_staff = by_staff
@@ -312,21 +385,30 @@ async def reopen_stall(ctx: StallContext, stall: Stall, *, exempt: bool = False)
 
 
 async def _restore_control(ctx: StallContext, thread: discord.Thread, stall: Stall) -> None:
-    """Turn the closed note back into the Bump / Close stall buttons, in place."""
+    """Turn the closed note back into the stall's buttons, in place."""
     from .views import ControlView
 
-    if stall.control_message_id is not None:
+    await _show(thread, stall, lambda pictures: ControlView(ctx, stall, pictures))
+
+
+async def _show(thread: discord.Thread, stall: Stall, layout: Layout) -> None:
+    """Swap what the control message shows, keeping its pictures. Posts a new one if it was deleted."""
+    message = await _control_message(thread, stall)
+    if message is not None:
         try:
-            await thread.get_partial_message(stall.control_message_id).edit(
-                content=control_text(ctx.settings, stall), view=ControlView(ctx), allowed_mentions=NO_MENTIONS
-            )
+            await _edit_control(thread, stall, layout, message, list(message.attachments))
             return
         except discord.NotFound:
-            pass
-    await _post_control(ctx, thread, stall)
+            pass  # deleted by hand: post a new one below
+    await _send_control(thread, stall, layout, [])
 
 
 # Helpers
+
+
+async def _unarchived(ctx: StallContext, stall: Stall) -> discord.Thread:
+    thread = await _thread(ctx, stall)
+    return await thread.edit(archived=False) if thread.archived else thread
 
 
 async def _thread(ctx: StallContext, stall: Stall) -> discord.Thread:

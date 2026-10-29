@@ -35,10 +35,16 @@ class ControlText:
     close_button: str
     reopen_button: str
     closed_text: str
-    pictures_button: str = "Pictures"
-    pictures_title: str = "Stall pictures"
-    pictures_label: str = "Pictures for your stall"
-    pictures_description: str = "Replaces the pictures under your stall. Submit with none to remove them."
+    add_picture_button: str = "Add picture"
+    remove_picture_button: str = "Remove picture"
+    picture_form_title: str = "Add a picture"
+    picture_label: str = "Picture"
+    picture_hint: str = "PNG, JPG, GIF or WEBP"
+    description_label: str = "Description"
+    description_placeholder: str = "e.g. AK-47 | Redline (FT 0.21) · $25"
+    picture_caption: str = "**{number}.** {description}"
+    no_description: str = "Picture"
+    remove_prompt: str = "Pick the pictures to remove:"
 
 
 @dataclass(frozen=True)
@@ -125,7 +131,8 @@ def validate(settings: StallSettings) -> list[str]:
         settings.control.bump_button,
         settings.control.close_button,
         settings.control.reopen_button,
-        settings.control.pictures_button,
+        settings.control.add_picture_button,
+        settings.control.remove_picture_button,
     )
     for label in labels:
         if not 1 <= len(label) <= MAX_BUTTON_LABEL:
@@ -133,6 +140,7 @@ def validate(settings: StallSettings) -> list[str]:
     for text, needed in (
         (settings.control.text, ("{owner}", "{bumped}")),
         (settings.control.closed_text, ("{reason}",)),
+        (settings.control.picture_caption, ("{number}", "{description}")),
         (settings.removed.duplicate, ("{link}",)),
         (settings.removed.bad_link, ("{links}",)),
         (settings.removed.too_soon, ("{when}",)),
@@ -163,10 +171,13 @@ def validate(settings: StallSettings) -> list[str]:
         errors.append("inactive_days must be at least 1")
     if not 1 <= limits.max_pictures <= 10:
         errors.append("max_pictures must be 1-10 (Discord allows 10 files per message)")
-    if len(settings.control.pictures_title) > 45 or len(settings.control.pictures_label) > 45:
-        errors.append("pictures_title and pictures_label must be 45 characters or less")
-    if len(settings.control.pictures_description) > 100:
-        errors.append("pictures_description must be 100 characters or less")
+    control = settings.control
+    for name in ("picture_form_title", "picture_label", "description_label"):
+        if not 1 <= len(getattr(control, name)) <= 45:
+            errors.append(f"{name} needs 1-45 characters")
+    for name in ("picture_hint", "description_placeholder", "remove_prompt", "no_description"):
+        if len(getattr(control, name)) > 100:
+            errors.append(f"{name} must be 100 characters or less")
     if settings.banner is not None and not re.fullmatch(r"[\w-]+", settings.banner):
         errors.append('banner should be a file name without .png, like "stalls"')
     return errors

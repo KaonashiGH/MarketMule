@@ -23,7 +23,7 @@ from .cog import Stalls
 from .context import StallContext
 from .settings import load_settings
 from .storage import StallStorage
-from .views import ControlView, ReopenView, StallPanel
+from .views import ControlView, OldPicturesButton, ReopenView, StallPanel
 
 if TYPE_CHECKING:
     from marketmule.core.bot import MarketMule
@@ -39,4 +39,5 @@ async def setup(bot: MarketMule) -> None:
     bot.add_view(StallPanel(ctx))
     bot.add_view(ControlView(ctx))
     bot.add_view(ReopenView(ctx))
+    bot.add_view(OldPicturesButton(ctx))
     await bot.add_cog(Stalls(ctx))
