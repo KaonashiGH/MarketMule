@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from typing import TYPE_CHECKING
 
 import discord
@@ -188,7 +188,7 @@ async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall)
     from .views import ControlView  # the views use this module, so import here
 
     message = await _control_message(thread, stall)
-    files = await _copy_files(thread, message.attachments) if message else []
+    files = await _copy_files(thread, shown_pictures(message)) if message else []
     await _send_control(thread, stall, lambda pictures: ControlView(ctx, stall, pictures), files)
 
 
@@ -207,6 +207,43 @@ async def _control_message(thread: discord.Thread, stall: Stall) -> discord.Mess
 
 def _pictures(attachments: Sequence[discord.Attachment | discord.File]) -> list[Picture]:
     return [Picture(a.filename, a.description or "") for a in attachments]
+
+
+def _walk(components: Sequence[object]) -> Iterator[object]:
+    for component in components:
+        yield component
+        yield from _walk(getattr(component, "children", None) or [])
+        accessory = getattr(component, "accessory", None)
+        if accessory is not None:
+            yield from _walk([accessory])
+
+
+def shown_pictures(message: discord.Message) -> list[discord.Attachment]:
+    """The pictures on a control message, in row order, with their descriptions.
+
+    Discord leaves files that a message shows in its layout out of `message.attachments`, so the
+    picture rows are read instead (each row's picture knows its file's ID). Old-style control
+    messages (before picture rows) still list theirs in `message.attachments`."""
+    found: list[discord.Attachment] = []
+    seen: set[int] = set()
+    for component in _walk(message.components):
+        if getattr(component, "type", None) != discord.ComponentType.thumbnail:
+            continue
+        media = component.media  # type: ignore[attr-defined]
+        if media.attachment_id is None or media.attachment_id in seen:
+            continue
+        seen.add(media.attachment_id)
+        data = {
+            "id": media.attachment_id,
+            "filename": media.url.split("?", 1)[0].rsplit("/", 1)[-1],
+            "size": 0,
+            "url": media.url,
+            "proxy_url": media.proxy_url or media.url,
+            "description": component.description,  # type: ignore[attr-defined]
+        }
+        found.append(discord.Attachment(data=data, state=message._state))  # type: ignore[arg-type]
+    found += [a for a in message.attachments if a.id not in seen]
+    return found
 
 
 async def _copy_files(thread: discord.Thread, attachments: Sequence[discord.Attachment]) -> list[discord.File]:
@@ -274,7 +311,7 @@ async def _edit_control(
 async def stall_pictures(ctx: StallContext, stall: Stall) -> list[Picture]:
     """The pictures under a stall, in order."""
     message = await _control_message(await _thread(ctx, stall), stall)
-    return _pictures(message.attachments) if message else []
+    return _pictures(shown_pictures(message)) if message else []
 
 
 async def add_picture(
@@ -298,11 +335,11 @@ async def add_picture(
         message = await _control_message(thread, stall)
         if message is None:
             raise StallError(MISSING_BUTTONS)
-        if len(message.attachments) >= limit:
+        keep = shown_pictures(message)
+        if len(keep) >= limit:
             raise StallError(f"Your stall already shows {limit} pictures. Remove one first.")
-        keep = list(message.attachments)
         count = len(keep) + 1
-        name = picture_name([a.filename for a in message.attachments], attachment.filename)
+        name = picture_name([a.filename for a in keep], attachment.filename)
         layout: Layout = lambda pictures: ControlView(ctx, stall, pictures)  # noqa: E731
         await _edit_control(thread, stall, layout, message, keep, [(attachment, name, description)])
         await ctx.storage.save_stall(stall)
@@ -319,8 +356,9 @@ async def remove_pictures(ctx: StallContext, stall: Stall, filenames: Sequence[s
         message = await _control_message(thread, stall)
         if message is None:
             raise StallError(MISSING_BUTTONS)
-        keep = [a for a in message.attachments if a.filename not in set(filenames)]
-        if len(keep) != len(message.attachments):
+        pictures = shown_pictures(message)
+        keep = [a for a in pictures if a.filename not in set(filenames)]
+        if len(keep) != len(pictures):
             layout: Layout = lambda pictures: ControlView(ctx, stall, pictures)  # noqa: E731
             await _edit_control(thread, stall, layout, message, keep)
             await ctx.storage.save_stall(stall)
@@ -396,7 +434,7 @@ async def _show(thread: discord.Thread, stall: Stall, layout: Layout) -> None:
     message = await _control_message(thread, stall)
     if message is not None:
         try:
-            await _edit_control(thread, stall, layout, message, list(message.attachments))
+            await _edit_control(thread, stall, layout, message, shown_pictures(message))
             return
         except discord.NotFound:
             pass  # deleted by hand: post a new one below

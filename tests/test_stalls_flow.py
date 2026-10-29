@@ -33,12 +33,23 @@ def not_found() -> discord.NotFound:
     return discord.NotFound(SimpleNamespace(status=404, reason="gone"), "Unknown")  # type: ignore[arg-type]
 
 
+FILE_IDS = iter(range(5000, 10**6))
+
+
 class FakeAttachment:
-    def __init__(self, filename: str, description: str | None = None) -> None:
+    def __init__(self, filename: str, description: str | None = None, attachment_id: int | None = None) -> None:
         self.filename, self.description = filename, description
+        self.id = attachment_id or next(FILE_IDS)
 
     async def to_file(self, filename: Any = None, description: Any = None) -> Any:
         return SimpleNamespace(filename=filename or self.filename, description=description or self.description)
+
+
+async def download(url: str) -> bytes:
+    return b"picture"
+
+
+FAKE_STATE = SimpleNamespace(http=SimpleNamespace(get_from_cdn=download))  # downloads for real discord.Attachments
 
 
 def bad_request() -> discord.HTTPException:
@@ -48,7 +59,8 @@ def bad_request() -> discord.HTTPException:
 class FakeMessage:
     def __init__(self, thread: "FakeThread", message_id: int, content: str, view: Any = None) -> None:
         self.thread, self.id, self.content, self.view = thread, message_id, content, view
-        self.attachments: list[FakeAttachment] = []
+        self.files: list[FakeAttachment] = []  # every file on the message
+        self._state = FAKE_STATE
         self.previews_hidden = False
         self.refuse_new_layout = False  # like an old-style message Discord won't switch to the new layout
         self.flags = SimpleNamespace(suppress_embeds=False, components_v2=isinstance(view, discord.ui.LayoutView))
@@ -65,14 +77,43 @@ class FakeMessage:
         if "view" in changes:
             self.view = changes["view"]
             self.flags.components_v2 = self.flags.components_v2 or new_layout
-        if "attachments" in changes:
-            self.attachments = [FakeAttachment(f.filename, f.description) for f in changes["attachments"]]
+        if "attachments" in changes:  # kept files keep their ID, new uploads get one
+            self.files = [
+                FakeAttachment(f.filename, f.description, getattr(f, "id", None)) for f in changes["attachments"]
+            ]
         if changes.get("suppress"):
             self.previews_hidden = self.flags.suppress_embeds = True
 
     @property
+    def attachments(self) -> list[FakeAttachment]:
+        """Like Discord: files the layout shows are left out of the attachment list."""
+        shown = {c.media.url.split("?")[0].rsplit("/", 1)[-1] for c in self.components}
+        return [f for f in self.files if f.filename not in shown]
+
+    @attachments.setter
+    def attachments(self, files: list[FakeAttachment]) -> None:
+        self.files = files
+
+    @property
+    def components(self) -> list[Any]:
+        """The layout as Discord sends it back: each picture row's picture points at its file by ID."""
+        if not isinstance(self.view, discord.ui.LayoutView):
+            return []
+        by_name = {f.filename: f.id for f in self.files}
+        rows = []
+        for item in self.view.walk_children():
+            if isinstance(item, discord.ui.Thumbnail):
+                name = item.media.url.removeprefix("attachment://")
+                url = f"https://cdn.discordapp.com/attachments/1/{by_name.get(name, 0)}/{name}?ex=abc"
+                media = SimpleNamespace(url=url, proxy_url=None, attachment_id=by_name.get(name))
+                rows.append(
+                    SimpleNamespace(type=discord.ComponentType.thumbnail, media=media, description=item.description)
+                )
+        return rows
+
+    @property
     def pictures(self) -> list[str]:
-        return [a.filename for a in self.attachments]
+        return [f.filename for f in self.files]
 
     @property
     def text(self) -> str:
@@ -123,7 +164,7 @@ class FakeThread:
 
     async def send(self, content: str | None = None, **kwargs: Any) -> FakeMessage:
         message = FakeMessage(self, self.parent.next_id(), content or "", kwargs.get("view"))
-        message.attachments = [FakeAttachment(f.filename, f.description) for f in kwargs.get("files", [])]
+        message.files = [FakeAttachment(f.filename, f.description) for f in kwargs.get("files", [])]
         self.messages[message.id] = message
         return message
 
