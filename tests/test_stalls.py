@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-import sqlite3
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -169,13 +168,15 @@ def test_storage_one_stall_per_member(tmp_path: Path) -> None:
             storage = StallStorage(db)
             await storage.migrate()
             await storage.add_stall(stall(control_message_id=5, closed_by_staff=True))
-            with pytest.raises(sqlite3.IntegrityError):
-                await storage.add_stall(stall(thread_id=2))  # same member, second stall
             saved = await storage.stall_of(1, 100)
             assert saved is not None and saved.control_message_id == 5 and saved.closed_by_staff
             saved.status = CLOSED
             await storage.save_stall(saved)
             assert await storage.count_stalls(10) == (0, 1)
+            # The database allows a second stall (exempt staff); the bot's rules decide who may have one.
+            await storage.add_stall(stall(thread_id=2))
+            assert (await storage.stall_of(1, 100)).thread_id == 2  # type: ignore[union-attr]  # the open one first
+            await storage.delete_stall(2)
             assert await storage.open_stalls() == []
             await storage.mark_deleted(1)
             assert (await storage.stall_of(1, 100)).is_deleted  # type: ignore[union-attr]
@@ -207,7 +208,7 @@ def test_commands() -> None:
     cog = Stalls(CTX)
     assert cog.__cog_group_name__ == "stalls"
     # Setup and removal are in /forums setup and /forums remove (pick "Stalls"); /stalls keeps the staff tools.
-    assert {c.name for c in cog.walk_app_commands()} == {"close", "reopen", "list"}
+    assert {c.name for c in cog.walk_app_commands()} == {"close", "reopen", "staffexempt", "list"}
     assert hasattr(cog, "setup_channel") and hasattr(cog, "remove_channel")
 
 
@@ -257,3 +258,30 @@ def test_start_here_post_gets_a_tag_when_the_channel_requires_one() -> None:
     asyncio.run(scenario(require_tag=True))
     asyncio.run(scenario(require_tag=False))
     assert [[t.name for t in tags] for tags in sent] == [["Open"], []]
+
+
+def test_database_update_keeps_existing_stalls(tmp_path: Path) -> None:
+    """Migration 2 (more than one stall per member) on a database that already has stalls."""
+    from marketmule.features.stalls.storage import MIGRATIONS
+
+    async def scenario() -> None:
+        db = Database(tmp_path / "test.db")
+        await db.connect()
+        try:
+            await db.migrate("stalls", MIGRATIONS[:1])  # what the server has today
+            await db.execute(
+                "INSERT INTO stalls (thread_id, guild_id, channel_id, owner_id, status, control_message_id,"
+                " created_at, active_at, bumped_at, closed_by_staff) VALUES (7, 1, 10, 100, 'open', 70, 1, 2, 3, 0)"
+            )
+            storage = StallStorage(db)
+            await storage.migrate()
+            assert await db.schema_version("stalls") == len(MIGRATIONS)
+            assert await storage.get_stall(7) == stall(
+                thread_id=7, control_message_id=70, created_at=1, active_at=2, bumped_at=3
+            )
+            await storage.add_stall(stall(thread_id=8))  # a second one for the same member is now allowed
+            assert len(await storage.open_stalls()) == 2
+        finally:
+            await db.close()
+
+    asyncio.run(scenario())

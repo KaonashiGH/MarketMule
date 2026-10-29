@@ -136,7 +136,7 @@ class FakeThread:
 class FakeForum(discord.ForumChannel):
     def __init__(self) -> None:  # skips discord.py's setup: only what the bot uses
         self.id, self.name = 10, "stalls"
-        self.guild = SimpleNamespace(id=1)  # type: ignore[assignment]
+        self.guild = SimpleNamespace(id=1, get_member=lambda user_id: SimpleNamespace(id=user_id))  # type: ignore[assignment]
         self.threads_by_id: dict[int, FakeThread] = {}
         self._next = 1000
         self._tags = [SimpleNamespace(id=n, name=name) for n, name in enumerate(SETTINGS.tags.values(), start=1)]
@@ -198,6 +198,7 @@ def run(world: Any, body: Callable[[Any, StallStorage, Database], Awaitable[None
             storage = StallStorage(db)
             await storage.migrate()
             await storage.save_channel(StallChannel(10, 1, None))
+            world.bot.db = db  # the shared settings table (staff exemption)
             ctx = StallContext(bot=world.bot, storage=storage, settings=SETTINGS)  # type: ignore[arg-type]
             await body(ctx, storage, db)
         finally:
@@ -406,5 +407,45 @@ def test_link_previews_are_hidden_and_pictures_go_under_the_stall(world: Any) ->
             await service.set_pictures(ctx, stall, [FakeAttachment(f"{n}.png") for n in range(11)])  # type: ignore[arg-type,misc]
         assert await service.set_pictures(ctx, await storage.get_stall(thread.id), []) == 0  # type: ignore[arg-type]
         assert thread.control.pictures == []
+
+    run(world, body)
+
+
+def test_staff_can_skip_the_limits_while_the_exemption_is_on(world: Any, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def staff_only_100(db: Any, user: Any) -> bool:
+        return user.id == 100
+
+    monkeypatch.setattr(service, "is_staff", staff_only_100)
+
+    async def body(ctx: StallContext, storage: StallStorage, db: Database) -> None:
+        events = Stalls(ctx)
+        first = FakeThread(world.forum, 100, "[Store] Staff test 1", GOOD_POST)
+        await events.on_thread_create(first)
+        await service.close_stall(ctx, await storage.get_stall(first.id), "Closed.")  # type: ignore[arg-type]
+
+        # On (the default): a staff member can post another stall, even with one closed or just deleted.
+        second = FakeThread(world.forum, 100, "[Store] Staff test 2", GOOD_POST)
+        await events.on_thread_create(second)
+        assert not second.deleted and await storage.get_stall(second.id) is not None
+        # ...and every edit bumps (no 6 hour wait).
+        before = second.control.id
+        await events.on_raw_message_edit(edit_event(second, GOOD_POST + " more", "e1"))
+        assert second.control.id > before
+        # Links are still checked for staff.
+        bad = FakeThread(world.forum, 100, "[Store] Staff bad", "see https://evil.site")
+        await events.on_thread_create(bad)
+        assert bad.deleted
+        # Members still follow the rules.
+        member_first = FakeThread(world.forum, 200, "[Store] Member", GOOD_POST)
+        member_second = FakeThread(world.forum, 200, "[Store] Member 2", GOOD_POST)
+        await events.on_thread_create(member_first)
+        await events.on_thread_create(member_second)
+        assert not member_first.deleted and member_second.deleted
+
+        # Off: staff follow the same rules as everyone.
+        await service.set_staff_exemption(ctx, 1, False)
+        third = FakeThread(world.forum, 100, "[Store] Staff test 3", GOOD_POST)
+        await events.on_thread_create(third)
+        assert third.deleted and "You already have a stall" in world.user(100).dms[-2]
 
     run(world, body)

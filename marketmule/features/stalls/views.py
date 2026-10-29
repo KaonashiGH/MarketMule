@@ -148,7 +148,10 @@ class ControlView(ui.View):
                 return
             await interaction.response.defer(ephemeral=True, thinking=True)
             by_owner = interaction.user.id == stall.owner_id
-            hours = self.ctx.settings.limits.manual_bump_hours
+            exempt = interaction.guild is not None and await service.is_exempt(
+                self.ctx, interaction.guild, interaction.user.id
+            )
+            hours = 0 if exempt else self.ctx.settings.limits.manual_bump_hours
             wait = await service.bump(self.ctx, stall, hours=hours, by_owner=by_owner)
             if wait:
                 await _say(interaction, f"You can bump again <t:{now() + wait}:R>.")
@@ -199,7 +202,10 @@ class PicturesForm(ui.Modal):
             if not await can_manage(self.ctx, interaction.user, stall):
                 raise StallError(NOT_OWNER)
             await interaction.response.defer(ephemeral=True, thinking=True)
-            count = await service.set_pictures(self.ctx, stall, list(self.upload.values))
+            exempt = interaction.guild is not None and await service.is_exempt(
+                self.ctx, interaction.guild, interaction.user.id
+            )
+            count = await service.set_pictures(self.ctx, stall, list(self.upload.values), exempt=exempt)
             await _say(interaction, f"Your stall shows {count} picture(s)." if count else "Pictures removed.")
 
         await _guarded(interaction, act)
@@ -267,7 +273,10 @@ class ReopenView(ui.View):
                 await _say(interaction, STAFF_CLOSED)
                 return
             await interaction.response.defer(ephemeral=True, thinking=True)
-            thread = await service.reopen_stall(self.ctx, stall)
+            exempt = interaction.guild is not None and await service.is_exempt(
+                self.ctx, interaction.guild, interaction.user.id
+            )
+            thread = await service.reopen_stall(self.ctx, stall, exempt=exempt)
             await _say(interaction, f"Your stall is open again: {thread.jump_url}")
 
         await _guarded(interaction, act)

@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from marketmule.core.discord_utils import fetch_thread
+from marketmule.core.staff import is_staff
 
 from .render import bad_links, closed_text, control_text, hours_text, removal_message, wait_left
 from .storage import CLOSED, DELETED, OPEN, Stall, StallChannel, now
@@ -22,6 +23,30 @@ NO_MENTIONS = discord.AllowedMentions.none()
 PICTURE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 WEEK_IN_MINUTES = 10080  # the longest Discord waits before hiding a quiet post; the bot unhides open stalls anyway
 MAX_POST_TAGS = 5
+
+
+EXEMPT_SETTING = "stalls_staff_exempt"  # per server, in the shared settings table: "1" (default) or "0"
+
+
+async def staff_exemption_on(ctx: StallContext, guild_id: int) -> bool:
+    return await ctx.bot.db.get_setting(guild_id, EXEMPT_SETTING) != "0"
+
+
+async def set_staff_exemption(ctx: StallContext, guild_id: int, on: bool) -> None:
+    await ctx.bot.db.set_setting(guild_id, EXEMPT_SETTING, "1" if on else "0")
+
+
+async def is_exempt(ctx: StallContext, guild: discord.Guild, user_id: int) -> bool:
+    """Staff skip the stall limits (one stall each, the repost wait, bump waits) while the exemption is on.
+
+    Links are still checked for everyone."""
+    if not await staff_exemption_on(ctx, guild.id):
+        return False
+    try:
+        member = guild.get_member(user_id) or await guild.fetch_member(user_id)
+    except discord.HTTPException:
+        return False
+    return await is_staff(ctx.bot.db, member)
 
 
 class StallError(Exception):
@@ -44,12 +69,14 @@ async def starter_message(thread: discord.Thread, tries: int = 4) -> discord.Mes
     return None
 
 
-async def problem_with_new_post(ctx: StallContext, thread: discord.Thread, owner_id: int, content: str) -> str | None:
+async def problem_with_new_post(
+    ctx: StallContext, thread: discord.Thread, owner_id: int, content: str, *, exempt: bool = False
+) -> str | None:
     """Why a new post can't be a stall, or None if it's fine.
 
     One stall per member; CSFloat and Steam links only; and a new post after deleting the old one counts
     as a bump, so it has to wait as long as the Bump button would (deleting and reposting can't skip it)."""
-    existing = await ctx.storage.stall_of(thread.guild.id, owner_id)
+    existing = None if exempt else await ctx.storage.stall_of(thread.guild.id, owner_id)
     if existing is not None and existing.thread_id != thread.id:
         if not existing.is_deleted:
             try:
@@ -139,11 +166,12 @@ async def bump(ctx: StallContext, stall: Stall, *, hours: float, by_owner: bool 
         return 0
 
 
-async def post_edited(ctx: StallContext, stall: Stall) -> bool:
+async def post_edited(ctx: StallContext, stall: Stall, *, exempt: bool = False) -> bool:
     """The owner edited their post: it counts as activity, and bumps at most every edit_bump_hours.
 
     Returns True if the stall was bumped."""
-    return await bump(ctx, stall, hours=ctx.settings.limits.edit_bump_hours) == 0
+    hours = 0 if exempt else ctx.settings.limits.edit_bump_hours
+    return await bump(ctx, stall, hours=hours) == 0
 
 
 async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall) -> None:
@@ -184,7 +212,9 @@ async def _pictures_of(thread: discord.Thread, message_id: int | None) -> list[d
     return files
 
 
-async def set_pictures(ctx: StallContext, stall: Stall, attachments: list[discord.Attachment]) -> int:
+async def set_pictures(
+    ctx: StallContext, stall: Stall, attachments: list[discord.Attachment], *, exempt: bool = False
+) -> int:
     """Replace the pictures under the stall (on the control message). An empty list removes them.
 
     Discord doesn't let anyone add pictures to a message by editing it, so this is how owners add them later.
@@ -211,7 +241,7 @@ async def set_pictures(ctx: StallContext, stall: Stall, attachments: list[discor
             raise StallError(
                 "This stall's buttons are missing. Press Bump to bring them back, then try again."
             ) from None
-    await post_edited(ctx, stall)
+    await post_edited(ctx, stall, exempt=exempt)
     return len(files)
 
 
@@ -263,7 +293,7 @@ async def close_stall(ctx: StallContext, stall: Stall, reason: str, *, by_staff:
     log.info("Closed stall %s: %s", stall.thread_id, reason)
 
 
-async def reopen_stall(ctx: StallContext, stall: Stall) -> discord.Thread:
+async def reopen_stall(ctx: StallContext, stall: Stall, *, exempt: bool = False) -> discord.Thread:
     async with ctx.lock(stall.thread_id):
         thread = await _thread(ctx, stall)
         thread = await thread.edit(archived=False, locked=False)
@@ -272,7 +302,7 @@ async def reopen_stall(ctx: StallContext, stall: Stall) -> discord.Thread:
         stall.closed_by_staff = False
         stall.active_at = moment
         await _set_status_tag(ctx, thread, OPEN)
-        if wait_left(stall.bumped_at, moment, ctx.settings.limits.manual_bump_hours) == 0:
+        if exempt or wait_left(stall.bumped_at, moment, ctx.settings.limits.manual_bump_hours) == 0:
             stall.bumped_at = moment
             await _post_control(ctx, thread, stall)  # a new message: back at the top
         else:

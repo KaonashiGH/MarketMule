@@ -15,7 +15,6 @@ Every UPKEEP_HOURS the bot closes stalls with no edits or bumps for inactive_day
 from __future__ import annotations
 
 import logging
-import sqlite3
 from typing import TYPE_CHECKING
 
 import discord
@@ -208,12 +207,25 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
             return
         await interaction.response.defer(ephemeral=True, thinking=True)
         try:
-            thread = await service.reopen_stall(self.ctx, stall)
+            thread = await service.reopen_stall(self.ctx, stall, exempt=True)
         except Exception:
             log.exception("Staff reopen failed")
             await interaction.followup.send("Couldn't reopen that stall.", ephemeral=True)
             return
         await interaction.followup.send(f"Reopened {member.mention}'s stall: {thread.jump_url}", ephemeral=True)
+
+    @app_commands.command(
+        description="Let staff skip the stall limits (one stall each, bump waits). Links still checked."
+    )
+    @app_commands.describe(enabled="On: staff skip the limits. Off: staff follow the same rules as everyone.")
+    async def staffexempt(self, interaction: discord.Interaction, enabled: bool) -> None:
+        if interaction.guild is None:
+            return
+        await service.set_staff_exemption(self.ctx, interaction.guild.id, enabled)
+        state = "**on**: staff can have several stalls and skip bump waits" if enabled else "**off**"
+        await interaction.response.send_message(
+            f"Staff exemption is {state}. Links are checked for everyone either way.", ephemeral=True
+        )
 
     @app_commands.command(name="list", description="Show the stalls channel and how many stalls it has")
     async def list_channels(self, interaction: discord.Interaction) -> None:
@@ -227,6 +239,8 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
         for channel in channels:
             open_count, closed_count = await self.ctx.storage.count_stalls(channel.channel_id)
             lines.append(f"<#{channel.channel_id}> → {open_count} open, {closed_count} closed")
+        exempt = await service.staff_exemption_on(self.ctx, interaction.guild.id)
+        lines.append(f"Staff exemption: **{'on' if exempt else 'off'}** (`/stalls staffexempt` to change)")
         await interaction.response.send_message("\n".join(lines), ephemeral=True)
 
     # Members' posts
@@ -245,18 +259,15 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
         try:
             message = await service.starter_message(thread)
             content = message.content if message else ""
-            problem = await service.problem_with_new_post(self.ctx, thread, owner_id, content)
-            if problem:
-                await service.remove_post(self.ctx, thread, owner_id, problem, content)
-                return
-            try:
+            exempt = await service.is_exempt(self.ctx, thread.guild, owner_id)
+            # One member's posts are handled one at a time, so two quick posts can't both become stalls.
+            async with self.ctx.lock(-owner_id):
+                problem = await service.problem_with_new_post(self.ctx, thread, owner_id, content, exempt=exempt)
+                if problem:
+                    await service.remove_post(self.ctx, thread, owner_id, problem, content)
+                    return
                 await service.register_stall(self.ctx, thread, owner_id)
-                await service.hide_link_previews(thread)
-            except sqlite3.IntegrityError:  # two posts at once: the first one counts
-                existing = await self.ctx.storage.stall_of(thread.guild.id, owner_id)
-                link = f"<#{existing.thread_id}>" if existing else "your other post"
-                reason = self.ctx.settings.removed.duplicate.format(link=link)
-                await service.remove_post(self.ctx, thread, owner_id, reason, content)
+            await service.hide_link_previews(thread)
         except Exception:
             log.exception("Couldn't set up stall post %s", thread.id)
 
@@ -285,9 +296,11 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
                 await self.ctx.storage.mark_deleted(stall.thread_id)
                 return
             guild = self.ctx.bot.get_guild(stall.guild_id)
+            exempt = False
             if guild is not None:
                 await service.hide_link_previews(await fetch_thread(guild, stall.thread_id))
-            await service.post_edited(self.ctx, stall)
+                exempt = await service.is_exempt(self.ctx, guild, stall.owner_id)
+            await service.post_edited(self.ctx, stall, exempt=exempt)
         except Exception:
             log.exception("Couldn't handle the edit to stall %s", stall.thread_id)
 

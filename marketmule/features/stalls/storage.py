@@ -35,6 +35,27 @@ MIGRATIONS: tuple[str, ...] = (
         UNIQUE (guild_id, owner_id)
     );
     """,
+    # 2: exempt staff can have more than one stall, so the one-per-member rule moves from the table to the code.
+    #    SQLite can't drop a UNIQUE rule, so the table is rebuilt with the same columns and data.
+    """
+    CREATE TABLE stalls_v2 (
+        thread_id          INTEGER PRIMARY KEY,
+        guild_id           INTEGER NOT NULL,
+        channel_id         INTEGER NOT NULL,
+        owner_id           INTEGER NOT NULL,
+        status             TEXT    NOT NULL,
+        control_message_id INTEGER,
+        created_at         INTEGER NOT NULL,
+        active_at          INTEGER NOT NULL,
+        bumped_at          INTEGER NOT NULL,
+        closed_by_staff    INTEGER NOT NULL DEFAULT 0
+    );
+    INSERT INTO stalls_v2 SELECT thread_id, guild_id, channel_id, owner_id, status, control_message_id,
+        created_at, active_at, bumped_at, closed_by_staff FROM stalls;
+    DROP TABLE stalls;
+    ALTER TABLE stalls_v2 RENAME TO stalls;
+    CREATE INDEX stalls_by_owner ON stalls (guild_id, owner_id);
+    """,
 )
 
 OPEN, CLOSED, DELETED = "open", "closed", "deleted"  # deleted: the post is gone, kept to time the next one
@@ -151,8 +172,14 @@ class StallStorage:
         return _stall(row) if row else None
 
     async def stall_of(self, guild_id: int, owner_id: int) -> Stall | None:
+        """The member's stall: an open one first, then a closed one, then the latest deleted one."""
         row = await self._db.fetch_one(
-            f"SELECT {COLUMNS} FROM stalls WHERE guild_id = ? AND owner_id = ?", guild_id, owner_id
+            f"SELECT {COLUMNS} FROM stalls WHERE guild_id = ? AND owner_id = ?"
+            " ORDER BY CASE status WHEN ? THEN 0 WHEN ? THEN 1 ELSE 2 END, bumped_at DESC LIMIT 1",
+            guild_id,
+            owner_id,
+            OPEN,
+            CLOSED,
         )
         return _stall(row) if row else None
 
