@@ -26,7 +26,7 @@ from marketmule.core.discord_utils import fetch_thread
 
 from . import service
 from .render import bad_links, is_inactive
-from .storage import StallChannel, now
+from .storage import OPEN, StallChannel, now
 from .views import StallPanel
 
 if TYPE_CHECKING:
@@ -366,10 +366,13 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
         files = []
         if settings.banner and banners_dir is not None and (banners_dir / f"{settings.banner}.png").is_file():
             files.append(discord.File(banners_dir / f"{settings.banner}.png", filename=settings.banner_filename))
+        # With "Require people to select tags" on, Discord refuses a post without a tag, the bot's included.
+        open_tag = service.find_tag(forum, settings.tag_name(OPEN)) if forum.flags.require_tag else None
         created = await forum.create_thread(
             name=settings.panel.thread_name,
             view=StallPanel(self.ctx, banner=settings.banner_filename if files else None),
             files=files,
+            applied_tags=[open_tag] if open_tag else [],
         )
         for thread in forum.threads:  # a forum can only have one pinned post
             if thread.flags.pinned and thread.id != created.thread.id:

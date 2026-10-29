@@ -269,6 +269,11 @@ async def setup_channel_problems(forum: discord.ForumChannel) -> list[str]:
         )
     if not everyone.send_messages:
         problems.append("@everyone can't **Create Posts**, so members can't open stalls. Turn it on in this channel.")
+    if forum.flags.require_tag and not any(not tag.moderated for tag in forum.available_tags):
+        problems.append(
+            "**Require people to select tags** is on, but every tag is staff-only, so members can't post. "
+            "Turn that setting off, or add tags members can pick (e.g. Knives, Stickers)."
+        )
     return problems
 
 

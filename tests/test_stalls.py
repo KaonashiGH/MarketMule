@@ -208,3 +208,51 @@ def test_commands() -> None:
     # Setup and removal are in /forums setup and /forums remove (pick "Stalls"); /stalls keeps the staff tools.
     assert {c.name for c in cog.walk_app_commands()} == {"close", "reopen", "list"}
     assert hasattr(cog, "setup_channel") and hasattr(cog, "remove_channel")
+
+
+def forum_with(require_tag: bool, member_tags: bool) -> Any:
+    perms = SimpleNamespace(send_messages=True, send_messages_in_threads=False)  # the right setup
+    tags = [SimpleNamespace(id=1, name="Open", moderated=True), SimpleNamespace(id=2, name="Closed", moderated=True)]
+    if member_tags:
+        tags.append(SimpleNamespace(id=3, name="Knives", moderated=False))
+    return SimpleNamespace(
+        guild=SimpleNamespace(default_role="everyone"),
+        permissions_for=lambda _role: perms,
+        flags=SimpleNamespace(require_tag=require_tag),
+        available_tags=tags,
+        threads=[],
+    )
+
+
+def test_setup_warns_when_members_could_not_post() -> None:
+    from marketmule.features.stalls.service import setup_channel_problems
+
+    assert asyncio.run(setup_channel_problems(forum_with(require_tag=False, member_tags=False))) == []
+    assert asyncio.run(setup_channel_problems(forum_with(require_tag=True, member_tags=True))) == []
+    (problem,) = asyncio.run(setup_channel_problems(forum_with(require_tag=True, member_tags=False)))
+    assert "Require people to select tags" in problem
+
+
+def test_start_here_post_gets_a_tag_when_the_channel_requires_one() -> None:
+    sent: list[Any] = []
+
+    async def scenario(require_tag: bool) -> None:
+        forum = forum_with(require_tag=require_tag, member_tags=True)
+        thread = SimpleNamespace(id=5)
+
+        async def edit(**_: Any) -> Any:
+            return thread
+
+        thread.edit = edit
+
+        async def create_thread(**kwargs: Any) -> Any:
+            sent.append(kwargs["applied_tags"])
+            return SimpleNamespace(thread=thread)
+
+        forum.create_thread = create_thread
+        ctx = cast(Any, SimpleNamespace(bot=SimpleNamespace(config=None), settings=SETTINGS))
+        await Stalls(ctx)._post_panel(forum)
+
+    asyncio.run(scenario(require_tag=True))
+    asyncio.run(scenario(require_tag=False))
+    assert [[t.name for t in tags] for tags in sent] == [["Open"], []]
