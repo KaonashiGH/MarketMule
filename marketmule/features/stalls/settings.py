@@ -35,6 +35,10 @@ class ControlText:
     close_button: str
     reopen_button: str
     closed_text: str
+    pictures_button: str = "Pictures"
+    pictures_title: str = "Stall pictures"
+    pictures_label: str = "Pictures for your stall"
+    pictures_description: str = "Replaces the pictures under your stall. Submit with none to remove them."
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,7 @@ class Limits:
     manual_bump_hours: float = 12
     edit_bump_hours: float = 6
     inactive_days: int = 30
+    max_pictures: int = 10
 
 
 @dataclass(frozen=True)
@@ -120,6 +125,7 @@ def validate(settings: StallSettings) -> list[str]:
         settings.control.bump_button,
         settings.control.close_button,
         settings.control.reopen_button,
+        settings.control.pictures_button,
     )
     for label in labels:
         if not 1 <= len(label) <= MAX_BUTTON_LABEL:
@@ -155,6 +161,12 @@ def validate(settings: StallSettings) -> list[str]:
         errors.append("bump hours can't be negative")
     if limits.inactive_days < 1:
         errors.append("inactive_days must be at least 1")
+    if not 1 <= limits.max_pictures <= 10:
+        errors.append("max_pictures must be 1-10 (Discord allows 10 files per message)")
+    if len(settings.control.pictures_title) > 45 or len(settings.control.pictures_label) > 45:
+        errors.append("pictures_title and pictures_label must be 45 characters or less")
+    if len(settings.control.pictures_description) > 100:
+        errors.append("pictures_description must be 100 characters or less")
     if settings.banner is not None and not re.fullmatch(r"[\w-]+", settings.banner):
         errors.append('banner should be a file name without .png, like "stalls"')
     return errors

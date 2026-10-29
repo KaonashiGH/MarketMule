@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 NO_MENTIONS = discord.AllowedMentions.none()
+PICTURE_TYPES = {"png", "jpg", "jpeg", "gif", "webp"}
 WEEK_IN_MINUTES = 10080  # the longest Discord waits before hiding a quiet post; the bot unhides open stalls anyway
 MAX_POST_TAGS = 5
 
@@ -146,11 +147,16 @@ async def post_edited(ctx: StallContext, stall: Stall) -> bool:
 
 
 async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall) -> None:
-    """Post the control message (a new message is what moves a forum post up), then delete the old one."""
+    """Post the control message (a new message is what moves a forum post up), then delete the old one.
+
+    The stall's pictures live on this message, so they're copied across to the new one."""
     from .views import ControlView  # the views use this module, so import here
 
     old = stall.control_message_id
-    sent = await thread.send(control_text(ctx.settings, stall), view=ControlView(ctx), allowed_mentions=NO_MENTIONS)
+    pictures = await _pictures_of(thread, old)
+    sent = await thread.send(
+        control_text(ctx.settings, stall), view=ControlView(ctx), files=pictures, allowed_mentions=NO_MENTIONS
+    )
     stall.control_message_id = sent.id
     if old and old != sent.id:
         try:
@@ -159,6 +165,67 @@ async def _post_control(ctx: StallContext, thread: discord.Thread, stall: Stall)
             pass
         except discord.HTTPException:
             log.warning("Couldn't delete the old control message in %s", thread.name)
+
+
+async def _pictures_of(thread: discord.Thread, message_id: int | None) -> list[discord.File]:
+    """The pictures on a control message, ready to post again. Empty if it has none or is gone."""
+    if message_id is None:
+        return []
+    try:
+        message = await thread.fetch_message(message_id)
+    except discord.HTTPException:
+        return []
+    files = []
+    for attachment in message.attachments:
+        try:
+            files.append(await attachment.to_file())
+        except discord.HTTPException:
+            log.warning("Couldn't copy a picture in %s", thread.name)
+    return files
+
+
+async def set_pictures(ctx: StallContext, stall: Stall, attachments: list[discord.Attachment]) -> int:
+    """Replace the pictures under the stall (on the control message). An empty list removes them.
+
+    Discord doesn't let anyone add pictures to a message by editing it, so this is how owners add them later.
+    It counts as an edit: activity, and a bump if the edit cooldown allows. Returns how many are shown."""
+    limit = ctx.settings.limits.max_pictures
+    if any(a.filename.lower().rsplit(".", 1)[-1] not in PICTURE_TYPES for a in attachments):
+        raise StallError("Only pictures can be added (PNG, JPG, GIF or WEBP).")
+    if len(attachments) > limit:
+        raise StallError(f"A stall can show up to {limit} pictures.")
+    files = []
+    for index, attachment in enumerate(attachments, start=1):
+        file = await attachment.to_file()
+        file.filename = f"{index}-{file.filename}"
+        files.append(file)
+    async with ctx.lock(stall.thread_id):
+        thread = await _thread(ctx, stall)
+        if thread.archived:
+            thread = await thread.edit(archived=False)
+        try:
+            if stall.control_message_id is None:
+                raise StallError("This stall's buttons are missing. Press Bump to bring them back, then try again.")
+            await thread.get_partial_message(stall.control_message_id).edit(attachments=files)
+        except discord.NotFound:
+            raise StallError(
+                "This stall's buttons are missing. Press Bump to bring them back, then try again."
+            ) from None
+    await post_edited(ctx, stall)
+    return len(files)
+
+
+async def hide_link_previews(thread: discord.Thread) -> None:
+    """Hide the link previews Discord adds under a stall post. The links stay clickable.
+
+    Changing another member's message like this needs Manage Messages in the channel."""
+    message = await starter_message(thread)  # a full message: a partial one can't hide previews
+    if message is None or message.flags.suppress_embeds:
+        return
+    try:
+        await message.edit(suppress=True)
+    except discord.HTTPException:
+        log.warning("Couldn't hide link previews in %s (does the bot have Manage Messages?)", thread.name)
 
 
 # Closing and reopening

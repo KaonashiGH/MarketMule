@@ -42,6 +42,7 @@ REQUIRED_PERMISSIONS = {
     "view_channel": "View Channel",
     "manage_channels": "Manage Channels",
     "manage_threads": "Manage Threads",
+    "manage_messages": "Manage Messages",
     "send_messages": "Create Posts",
     "send_messages_in_threads": "Send Messages in Posts",
     "embed_links": "Embed Links",
@@ -250,6 +251,7 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
                 return
             try:
                 await service.register_stall(self.ctx, thread, owner_id)
+                await service.hide_link_previews(thread)
             except sqlite3.IntegrityError:  # two posts at once: the first one counts
                 existing = await self.ctx.storage.stall_of(thread.guild.id, owner_id)
                 link = f"<#{existing.thread_id}>" if existing else "your other post"
@@ -282,6 +284,9 @@ class Stalls(commands.GroupCog, group_name="stalls", group_description="Set up a
                 await service.remove_post(self.ctx, thread, stall.owner_id, reason, content)
                 await self.ctx.storage.mark_deleted(stall.thread_id)
                 return
+            guild = self.ctx.bot.get_guild(stall.guild_id)
+            if guild is not None:
+                await service.hide_link_previews(await fetch_thread(guild, stall.thread_id))
             await service.post_edited(self.ctx, stall)
         except Exception:
             log.exception("Couldn't handle the edit to stall %s", stall.thread_id)

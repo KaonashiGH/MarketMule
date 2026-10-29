@@ -2,7 +2,7 @@
   "panel": {
     "thread_name": "Start here: Open your stall",
     "title": "How to open a stall",
-    "text": "Want a permanent shop in the server? Make your own post in this channel and it becomes your stall.\n\n**1.** Press **Get the template** below and copy it.\n**2.** Press **New Post** at the top of this channel. Title it like `[Store] Doppler knives and cheap stickers` or `[Have] Butterfly Fade [Want] Cash`.\n**3.** Paste the template, fill it in, and add screenshots with **+**. Make it your own: change the layout, add items, whatever you like.\n\n**Edit your post any time** to add, change or sell items. Under your stall you get a **Bump** button that moves it to the top once every 12 hours, and editing your post bumps it too (at most every 6 hours).\n\n**Rules:** one stall per member · only CSFloat and Steam links (anything else gets your post removed) · replies are off, so buyers DM the seller · deleting and reposting, or closing and reopening, can't get you to the top sooner than Bump · stalls with no edits or bumps for 30 days close, and you can reopen yours any time.",
+    "text": "Want a permanent shop in the server? Make your own post in this channel and it becomes your stall.\n\n**1.** Press **Get the template** below and copy it.\n**2.** Press **New Post** at the top of this channel. Title it like `[Store] Doppler knives and cheap stickers` or `[Have] Butterfly Fade [Want] Cash`.\n**3.** Paste the template, fill it in, and add screenshots with **+**. Make it your own: change the layout, add items, whatever you like.\n\nDiscord doesn't let you add pictures by editing a post, so to add or change pictures later, use the **Pictures** button under your stall.\n\n**Edit your post any time** to add, change or sell items. Under your stall you get a **Bump** button that moves it to the top once every 12 hours, and editing your post bumps it too (at most every 6 hours).\n\n**Rules:** one stall per member · only CSFloat and Steam links (anything else gets your post removed) · replies are off, so buyers DM the seller · deleting and reposting, or closing and reopening, can't get you to the top sooner than Bump · stalls with no edits or bumps for 30 days close, and you can reopen yours any time.",
     "button_label": "Get the template"
   },
   "banner": "stalls",
@@ -18,6 +18,10 @@
     "bump_button": "Bump",
     "close_button": "Close stall",
     "reopen_button": "Reopen stall",
+    "pictures_button": "Pictures",
+    "pictures_title": "Stall pictures",
+    "pictures_label": "Pictures for your stall",
+    "pictures_description": "Replaces the pictures under your stall. Submit with none to remove them.",
     "closed_text": "⚫ **This stall is closed.** {reason}"
   },
 
@@ -37,6 +41,7 @@
   "limits": {
     "manual_bump_hours": 12,
     "edit_bump_hours": 6,
-    "inactive_days": 30
+    "inactive_days": 30,
+    "max_pictures": 10
   }
 }

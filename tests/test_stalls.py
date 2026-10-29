@@ -33,6 +33,7 @@ from marketmule.features.stalls.storage import CLOSED, Stall, StallStorage
 from marketmule.features.stalls.views import (
     BUMP_BUTTON_ID,
     CLOSE_BUTTON_ID,
+    PICTURES_BUTTON_ID,
     REOPEN_BUTTON_ID,
     TEMPLATE_BUTTON_ID,
     ControlView,
@@ -199,7 +200,7 @@ def test_buttons_survive_restarts() -> None:
     views = asyncio.run(build())
     assert all(view.is_persistent() for view in views)
     ids = [c.custom_id for v in views for c in v.walk_children() if isinstance(c, discord.ui.Button)]
-    assert ids == [TEMPLATE_BUTTON_ID, BUMP_BUTTON_ID, CLOSE_BUTTON_ID, REOPEN_BUTTON_ID]
+    assert ids == [TEMPLATE_BUTTON_ID, BUMP_BUTTON_ID, PICTURES_BUTTON_ID, CLOSE_BUTTON_ID, REOPEN_BUTTON_ID]
 
 
 def test_commands() -> None:

@@ -110,10 +110,12 @@ A stall is a member's own post in the stalls channel. They write it however they
 | Safe links only | Posts may only link to `csfloat.com` and `steamcommunity.com`. A post with any other link (including look-alikes like `csfloat.com.evil.site`) is removed, on posting or on editing, with a DM explaining why and a copy of the text. |
 | ⛔ Close stall | The owner (or staff) can close a stall; it's locked and hidden with a **Reopen stall** button. Stalls with no edits or bumps for 30 days close by themselves. If staff close a stall, only staff can reopen it. |
 | Tags | 🟢 Open / ⚫ Closed are staff-only tags the bot sets. Any other tags members pick are kept. |
+| 🖼️ Pictures | Discord doesn't let members add pictures by editing a post, so a **Pictures** button under each stall uploads up to 10. They show under the post and move with it when it's bumped; uploading again replaces them. Counts as an edit for bumping. |
+| No link previews | The bot hides the big link previews on stall posts (on posting and after edits). The links stay clickable. |
 
 Only the owner and staff can use a stall's buttons. Deleting a stall post frees its owner to post a new one, once the Bump wait has passed.
 
-**Channel setup:** for @everyone, **Create Posts: on** and **Send Messages in Posts: off**. Set it up with `/forums setup` and pick **Stalls** as the form. That checks these permissions and sorts the forum by **Recent Activity**, which is what makes bumps work. A channel is either a forms channel or the stalls channel, not both.
+**Channel setup:** for @everyone, **Create Posts: on** and **Send Messages in Posts: off**. The bot's role also needs **Manage Messages** there, to hide link previews. Set it up with `/forums setup` and pick **Stalls** as the form. That checks these permissions and sorts the forum by **Recent Activity**, which is what makes bumps work. A channel is either a forms channel or the stalls channel, not both.
 
 **Message Content Intent:** the bot reads members' posts to check their links, so turn on **Message Content Intent** in the Discord Developer Portal (your app → Bot). Do this *before* deploying: with it off, Discord refuses the bot's connection.
 

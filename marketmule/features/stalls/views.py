@@ -28,6 +28,8 @@ log = logging.getLogger(__name__)
 TEMPLATE_BUTTON_ID = "marketmule:stalls:template"
 BUMP_BUTTON_ID = "marketmule:stalls:bump"
 CLOSE_BUTTON_ID = "marketmule:stalls:close"
+PICTURES_BUTTON_ID = "marketmule:stalls:pictures"
+FORM_TIMEOUT = 15 * 60
 REOPEN_BUTTON_ID = "marketmule:stalls:reopen"
 CONFIRM_TIMEOUT = 5 * 60
 NOT_OWNER = "Only the stall's owner can use these buttons. Want your own stall? See the Start here post."
@@ -115,7 +117,15 @@ class ControlView(ui.View):
             custom_id=CLOSE_BUTTON_ID,
         )
         close.callback = self.close
+        pictures: ui.Button = ui.Button(
+            label=control.pictures_button,
+            emoji=_emoji(ctx, "mm_additem", "🖼️"),
+            style=discord.ButtonStyle.secondary,
+            custom_id=PICTURES_BUTTON_ID,
+        )
+        pictures.callback = self.pictures
         self.add_item(bump)
+        self.add_item(pictures)
         self.add_item(close)
 
     async def _own_open_stall(self, interaction: discord.Interaction) -> Stall | None:
@@ -147,6 +157,14 @@ class ControlView(ui.View):
 
         await _guarded(interaction, act)
 
+    async def pictures(self, interaction: discord.Interaction) -> None:
+        async def act() -> None:
+            stall = await self._own_open_stall(interaction)
+            if stall is not None:
+                await interaction.response.send_modal(PicturesForm(self.ctx, stall.thread_id))
+
+        await _guarded(interaction, act)
+
     async def close(self, interaction: discord.Interaction) -> None:
         async def act() -> None:
             stall = await self._own_open_stall(interaction)
@@ -158,6 +176,37 @@ class ControlView(ui.View):
                 )
 
         await _guarded(interaction, act)
+
+
+class PicturesForm(ui.Modal):
+    """Upload pictures for a stall. They show under the post, in the bot's message with the buttons."""
+
+    def __init__(self, ctx: StallContext, thread_id: int) -> None:
+        control = ctx.settings.control
+        super().__init__(title=control.pictures_title, timeout=FORM_TIMEOUT)
+        self.ctx = ctx
+        self.thread_id = thread_id
+        self.upload = ui.FileUpload(required=False, max_values=ctx.settings.limits.max_pictures)
+        self.add_item(
+            ui.Label(text=control.pictures_label, description=control.pictures_description, component=self.upload)
+        )
+
+    async def on_submit(self, interaction: discord.Interaction) -> None:
+        async def act() -> None:
+            stall = await self.ctx.storage.get_stall(self.thread_id)
+            if stall is None or stall.is_closed or stall.is_deleted:
+                raise StallError("This stall is closed.")
+            if not await can_manage(self.ctx, interaction.user, stall):
+                raise StallError(NOT_OWNER)
+            await interaction.response.defer(ephemeral=True, thinking=True)
+            count = await service.set_pictures(self.ctx, stall, list(self.upload.values))
+            await _say(interaction, f"Your stall shows {count} picture(s)." if count else "Pictures removed.")
+
+        await _guarded(interaction, act)
+
+    async def on_error(self, interaction: discord.Interaction, error: Exception, /) -> None:
+        log.exception("Stall pictures form failed", exc_info=error)
+        await _say(interaction, "Something went wrong with the upload. Please try again.")
 
 
 class ConfirmClose(ui.View):

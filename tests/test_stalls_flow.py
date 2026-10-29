@@ -33,20 +33,54 @@ def not_found() -> discord.NotFound:
     return discord.NotFound(SimpleNamespace(status=404, reason="gone"), "Unknown")  # type: ignore[arg-type]
 
 
+class FakeAttachment:
+    def __init__(self, filename: str) -> None:
+        self.filename = filename
+
+    async def to_file(self) -> Any:
+        return SimpleNamespace(filename=self.filename)
+
+
 class FakeMessage:
     def __init__(self, thread: "FakeThread", message_id: int, content: str, view: Any = None) -> None:
         self.thread, self.id, self.content, self.view = thread, message_id, content, view
+        self.attachments: list[FakeAttachment] = []
+        self.previews_hidden = False
+        self.flags = SimpleNamespace(suppress_embeds=False)
 
     async def edit(self, **changes: Any) -> None:
-        if self.id not in self.thread.messages:
+        if self.id not in self.thread.messages and self.id != self.thread.id:
             raise not_found()
         self.content = changes.get("content", self.content)
         if "view" in changes:
             self.view = changes["view"]
+        if "attachments" in changes:
+            self.attachments = [FakeAttachment(f.filename) for f in changes["attachments"]]
+        if changes.get("suppress"):
+            self.previews_hidden = self.flags.suppress_embeds = True
+
+    @property
+    def pictures(self) -> list[str]:
+        return [a.filename for a in self.attachments]
 
     async def delete(self) -> None:
         if self.thread.messages.pop(self.id, None) is None:
             raise not_found()
+
+
+class FakePartial:
+    """Like discord.py's PartialMessage: it can edit and delete, but can't hide link previews (no `suppress`)."""
+
+    def __init__(self, message: FakeMessage) -> None:
+        self.message = message
+
+    async def edit(self, **changes: Any) -> None:
+        if "suppress" in changes:
+            raise TypeError("PartialMessage.edit() got an unexpected keyword argument 'suppress'")
+        await self.message.edit(**changes)
+
+    async def delete(self) -> None:
+        await self.message.delete()
 
 
 class FakeThread:
@@ -62,14 +96,21 @@ class FakeThread:
 
     async def send(self, content: str, **kwargs: Any) -> FakeMessage:
         message = FakeMessage(self, self.parent.next_id(), content, kwargs.get("view"))
+        message.attachments = [FakeAttachment(f.filename) for f in kwargs.get("files", [])]
         self.messages[message.id] = message
         return message
 
-    def get_partial_message(self, message_id: int) -> FakeMessage:
-        return self.messages.get(message_id) or FakeMessage(self, message_id, "")
+    def get_partial_message(self, message_id: int) -> "FakePartial":
+        if message_id == self.id:
+            return FakePartial(self.starter_message)
+        return FakePartial(self.messages.get(message_id) or FakeMessage(self, message_id, ""))
 
     async def fetch_message(self, message_id: int) -> FakeMessage:
-        return self.starter_message
+        if message_id == self.id:
+            return self.starter_message
+        if message_id not in self.messages:
+            raise not_found()
+        return self.messages[message_id]
 
     async def edit(self, **changes: Any) -> "FakeThread":
         for key in ("archived", "locked", "applied_tags"):
@@ -332,5 +373,38 @@ def test_deleting_and_reposting_or_closing_and_reopening_cant_skip_the_bump_wait
         # Deleting just the post's text removes the whole post (an empty stall isn't a stall), same wait after.
         await events.on_raw_message_delete(SimpleNamespace(message_id=later.id, channel_id=later.id))
         assert later.deleted and (await storage.stall_of(1, 100)).is_deleted  # type: ignore[union-attr]
+
+    run(world, body)
+
+
+def test_link_previews_are_hidden_and_pictures_go_under_the_stall(world: Any) -> None:
+    async def body(ctx: StallContext, storage: StallStorage, db: Database) -> None:
+        events = Stalls(ctx)
+        thread = FakeThread(world.forum, 100, "[Store] Knives", GOOD_POST)
+        await events.on_thread_create(thread)
+        assert thread.starter_message.previews_hidden  # links stay, previews go
+        thread.starter_message.previews_hidden = thread.starter_message.flags.suppress_embeds = False
+        await events.on_raw_message_edit(edit_event(thread, GOOD_POST + " https://csfloat.com/item/2", "t1"))
+        assert thread.starter_message.previews_hidden  # hidden again after an edit (if Discord showed them again)
+
+        # Pictures: added to the bot's message under the post, in place (soon after a bump, so no new bump).
+        stall = await storage.get_stall(thread.id)
+        before = thread.control.id
+        count = await service.set_pictures(ctx, stall, [FakeAttachment("ak.png"), FakeAttachment("gloves.jpg")])  # type: ignore[arg-type,list-item]
+        assert count == 2 and thread.control.id == before
+        assert thread.control.pictures == ["1-ak.png", "2-gloves.jpg"]
+
+        # A bump posts the buttons again, and the pictures come along.
+        await turn_back_bump_clock(db, 13)
+        assert await service.bump(ctx, await storage.get_stall(thread.id), hours=12) == 0  # type: ignore[arg-type]
+        assert thread.control.id > before and thread.control.pictures == ["1-ak.png", "2-gloves.jpg"]
+
+        # Only pictures, at most 10; uploading nothing removes them.
+        with pytest.raises(service.StallError, match="Only pictures"):
+            await service.set_pictures(ctx, stall, [FakeAttachment("notes.pdf")])  # type: ignore[arg-type,list-item]
+        with pytest.raises(service.StallError, match="up to 10"):
+            await service.set_pictures(ctx, stall, [FakeAttachment(f"{n}.png") for n in range(11)])  # type: ignore[arg-type,misc]
+        assert await service.set_pictures(ctx, await storage.get_stall(thread.id), []) == 0  # type: ignore[arg-type]
+        assert thread.control.pictures == []
 
     run(world, body)
