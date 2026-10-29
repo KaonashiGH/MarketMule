@@ -100,16 +100,16 @@ class StallPanel(ui.LayoutView):
         await _say(interaction, template_message(self.ctx.settings))
 
 
-def _card(ctx: StallContext, text: str, pictures: Sequence[Picture], buttons: Sequence[ui.Button]) -> ui.Container:
-    """The control message: the stall line, one row per picture (description beside it), then the buttons."""
-    card: ui.Container = ui.Container(accent_color=ctx.settings.color)
-    card.add_item(ui.TextDisplay(text))
+def _card(ctx: StallContext, text: str, pictures: Sequence[Picture], buttons: Sequence[ui.Button]) -> list[ui.Item]:
+    """The control message, with no box around it: the stall line, one row per picture (description with the
+    picture beside it), then the buttons."""
+    items: list[ui.Item] = [ui.TextDisplay(text)]
     for number, picture in enumerate(pictures, start=1):
         caption = picture_caption(ctx.settings, number, picture.description)
         thumbnail = ui.Thumbnail(f"attachment://{picture.filename}", description=picture.description[:256] or None)
-        card.add_item(ui.Section(ui.TextDisplay(caption), accessory=thumbnail))
-    card.add_item(ui.ActionRow(*buttons))
-    return card
+        items.append(ui.Section(ui.TextDisplay(caption), accessory=thumbnail))
+    items.append(ui.ActionRow(*buttons))
+    return items
 
 
 async def _open_stall_for(ctx: StallContext, interaction: discord.Interaction) -> Stall | None:
@@ -175,7 +175,8 @@ class ControlView(ui.LayoutView):
             if not pictures:
                 buttons.remove(remove)
         text = control_text(ctx.settings, stall) if stall is not None else control.bump_button
-        self.add_item(_card(ctx, text, pictures, buttons))
+        for item in _card(ctx, text, pictures, buttons):
+            self.add_item(item)
 
     async def bump(self, interaction: discord.Interaction) -> None:
         async def act() -> None:
@@ -370,7 +371,8 @@ class ReopenView(ui.LayoutView):
             custom_id=REOPEN_BUTTON_ID,
         )
         button.callback = self.reopen
-        self.add_item(_card(ctx, text or ctx.settings.control.reopen_button, pictures, [button]))
+        for item in _card(ctx, text or ctx.settings.control.reopen_button, pictures, [button]):
+            self.add_item(item)
 
     async def reopen(self, interaction: discord.Interaction) -> None:
         async def act() -> None:
